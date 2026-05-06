@@ -46,6 +46,9 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    // Sherpa-onnx 本地语音识别（需要手动下载模型）
+    // Sherpa-onnx 本地语音识别（需要手动下载模型到 assets/models）
     // implementation("com.github.k2-fsa:sherpa-onnx:v1.12.1")
 }
+
+// 应用模型下载脚本（可选：构建时自动下载模型）
+// apply(from = "download-models.gradle.kts")
