@@ -5,8 +5,10 @@
 set -e
 
 MODELS_DIR="../app/src/main/assets/models/sherpa"
-MODEL_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-small-bilingual-zh-en-2023-02-16.tar.bz2"
+MODEL_NAME="sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
+MODEL_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${MODEL_NAME}.tar.bz2"
 MODEL_FILE="model.tar.bz2"
+MODEL_MARKER="$MODELS_DIR/.model-name"
 
 detect_system_proxy() {
     # Prefer the Windows system proxy when the script is run from Git Bash/MSYS.
@@ -29,13 +31,23 @@ echo ""
 mkdir -p "$MODELS_DIR"
 
 # 检查是否已下载
-if [ -f "$MODELS_DIR/encoder.onnx" ]; then
+if [ -f "$MODEL_MARKER" ] &&
+    [ "$(cat "$MODEL_MARKER")" = "$MODEL_NAME" ] &&
+    compgen -G "$MODELS_DIR/encoder*.onnx" > /dev/null &&
+    [ -f "$MODELS_DIR/tokens.txt" ]; then
     echo "✓ 模型文件已存在，跳过下载"
     echo "  位置: $MODELS_DIR"
     exit 0
 fi
 
-echo "正在下载语音模型（约 50MB）..."
+if [ -n "$(ls -A "$MODELS_DIR" 2>/dev/null)" ]; then
+    echo "检测到旧模型或不完整模型，正在清理: $MODELS_DIR"
+    shopt -s dotglob nullglob
+    rm -rf "$MODELS_DIR"/*
+    shopt -u dotglob nullglob
+fi
+
+echo "正在下载中文流式语音模型（约 70MB）..."
 echo "来源: $MODEL_URL"
 echo ""
 
@@ -62,6 +74,7 @@ curl "${CURL_PROXY_ARGS[@]}" \
 echo ""
 echo "正在解压模型..."
 tar -xjf "$MODEL_FILE" -C "$MODELS_DIR" --strip-components=1
+printf "%s\n" "$MODEL_NAME" > "$MODEL_MARKER"
 
 # 清理
 rm "$MODEL_FILE"

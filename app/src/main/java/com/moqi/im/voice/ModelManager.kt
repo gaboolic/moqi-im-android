@@ -14,8 +14,8 @@ object ModelManager {
     private const val TAG = "ModelManager"
     private const val MODEL_BASE_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/"
     
-    // 使用较小的 paraformer 中文模型
-    private const val MODEL_ZIP = "sherpa-onnx-streaming-zipformer-small-bilingual-zh-en-2023-02-16.tar.bz2"
+    // 使用较小的中文流式 Zipformer 模型
+    private const val MODEL_ZIP = "sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2"
     
     data class ModelFile(
         val name: String,

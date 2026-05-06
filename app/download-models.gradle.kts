@@ -6,18 +6,26 @@
 import java.util.zip.ZipInputStream
 
 val modelsDir = file("src/main/assets/models/sherpa")
-val modelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-small-bilingual-zh-en-2023-02-16.tar.bz2"
+val modelName = "sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
+val modelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$modelName.tar.bz2"
 val modelArchive = file("build/sherpa-model.tar.bz2")
+val modelMarker = file("$modelsDir/.model-name")
 
 tasks.register<Exec>("downloadSherpaModels") {
     group = "setup"
     description = "Download Sherpa-onnx speech recognition model"
     
     onlyIf {
-        !file("$modelsDir/encoder.onnx").exists()
+        !modelMarker.exists() ||
+            modelMarker.readText().trim() != modelName ||
+            modelsDir.listFiles { file -> file.name.startsWith("encoder") && file.extension == "onnx" }.isNullOrEmpty() ||
+            !file("$modelsDir/tokens.txt").exists()
     }
     
     doFirst {
+        if (modelMarker.exists() && modelMarker.readText().trim() != modelName) {
+            modelsDir.deleteRecursively()
+        }
         modelsDir.mkdirs()
     }
     
@@ -29,6 +37,7 @@ tasks.register<Exec>("downloadSherpaModels") {
         exec {
             commandLine("tar", "-xjf", modelArchive.absolutePath, "-C", modelsDir.absolutePath, "--strip-components=1")
         }
+        modelMarker.writeText("$modelName\n")
         println("✓ Sherpa-onnx model downloaded to $modelsDir")
     }
 }
