@@ -334,15 +334,13 @@ class KeyboardView @JvmOverloads constructor(
 
     private fun voiceRows(): List<List<KeyDefinition>> = listOf(
         listOf(
-            KeyDefinition("返回键盘", KeyCode.EXIT_VOICE, 3f),
-            KeyDefinition("🎤", KeyCode.VOICE, 3f),
-            KeyDefinition("中/英", KeyCode.MODE_SWITCH, 3f)
+            KeyDefinition("返回键盘", KeyCode.EXIT_VOICE, 4f),
+            KeyDefinition("中/英", KeyCode.MODE_SWITCH, 4f),
+            KeyDefinition("9键", KeyCode.SWITCH_TO_T9, 4f)
         ),
         listOf(
-            KeyDefinition("拼音", KeyCode.EXIT_VOICE, 1.5f),
-            KeyDefinition("五笔", KeyCode.MODE_SWITCH, 1.5f),
-            KeyDefinition("英文", KeyCode.MODE_SWITCH, 1.5f),
-            KeyDefinition("9键", KeyCode.SWITCH_TO_T9, 1.5f),
+            KeyDefinition("26键", KeyCode.SWITCH_TO_QWERTY, 1.5f),
+            KeyDefinition("🎤 语音输入", KeyCode.VOICE, 4f),
             KeyDefinition("↵", KeyCode.ENTER, 1.5f)
         )
     )

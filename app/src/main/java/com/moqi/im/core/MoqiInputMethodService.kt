@@ -125,13 +125,19 @@ class MoqiInputMethodService : InputMethodService() {
             KeyCode.PERIOD -> commitText("。")
             KeyCode.SWITCH_TO_QWERTY -> {
                 isT9Mode = false
-                if (currentMode == InputMode.VOICE) currentMode = modeBeforeVoice
+                if (currentMode == InputMode.VOICE) {
+                    currentMode = modeBeforeVoice
+                    engine = EngineFactory.create(currentMode)
+                }
                 updateKeyboard()
                 resetT9State()
             }
             KeyCode.SWITCH_TO_T9 -> {
                 isT9Mode = true
-                if (currentMode == InputMode.VOICE) currentMode = modeBeforeVoice
+                if (currentMode == InputMode.VOICE) {
+                    currentMode = modeBeforeVoice
+                    engine = EngineFactory.create(currentMode)
+                }
                 updateKeyboard()
                 resetT9State()
             }
@@ -290,7 +296,13 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun exitVoiceMode() {
-        switchMode(modeBeforeVoice)
+        currentMode = modeBeforeVoice
+        engine = EngineFactory.create(currentMode)
+        composingText.clear()
+        engine.reset()
+        candidateView?.setCandidates(emptyList())
+        updateComposeView()
+        updateKeyboard()
     }
 
     private fun switchMode(mode: InputMode) {
@@ -325,19 +337,15 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun updateKeyboard() {
-        if (currentMode == InputMode.VOICE) {
-            keyboardView?.showVoiceMode()
-            return
-        }
-
-        val layout = if (isT9Mode) {
+        val layout = if (currentMode == InputMode.VOICE) {
+            KeyboardView.Layout.VOICE
+        } else if (isT9Mode) {
             when (currentMode) {
                 InputMode.ENGLISH -> KeyboardView.Layout.T9_EN
                 else -> KeyboardView.Layout.T9_CN
             }
         } else {
             when (currentMode) {
-                InputMode.PINYIN, InputMode.WUBI -> KeyboardView.Layout.QWERTY_CN
                 InputMode.ENGLISH -> KeyboardView.Layout.QWERTY_EN
                 else -> KeyboardView.Layout.QWERTY_CN
             }
