@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:padding="32dp"
+    android:background="#F0F0F5">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:textColor="#1A1A2E"
+        android:layout_marginTop="32dp" />
+
+    <TextView
+        android:id="@+id/tv_setup_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="18sp"
+        android:textColor="#333333"
+        android:gravity="center"
+        android:layout_marginTop="24dp"
+        android:lineSpacingMultiplier="1.3" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/setup_guide"
+        android:textSize="15sp"
+        android:textColor="#666666"
+        android:gravity="center"
+        android:layout_marginTop="16dp"
+        android:lineSpacingMultiplier="1.3" />
+
+    <Button
+        android:id="@+id/btn_enable_ime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/setup_enable"
+        android:layout_marginTop="24dp"
+        android:backgroundTint="#0F3460"
+        android:textColor="#FFFFFF" />
+
+    <Button
+        android:id="@+id/btn_select_ime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/setup_select"
+        android:layout_marginTop="12dp"
+        android:backgroundTint="#0F3460"
+        android:textColor="#FFFFFF" />
+
+    <Button
+        android:id="@+id/btn_go_settings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/setup_go_settings"
+        android:layout_marginTop="12dp"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:textColor="#0F3460" />
+
+</LinearLayout>

@@ -13,7 +13,7 @@
         android:theme="@style/Theme.MoqiIM">
 
         <activity
-            android:name=".settings.SettingsActivity"
+            android:name=".settings.SetupActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.MoqiIM">
@@ -23,9 +23,15 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".settings.SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings_title"
+            android:theme="@style/Theme.MoqiIM" />
+
         <service
             android:name=".core.MoqiInputMethodService"
-            android:exported="false"
+            android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_INPUT_METHOD">
             <intent-filter>

@@ -20,4 +20,11 @@
     <string name="pref_privacy_summary">墨奇输入法所有数据均在本地处理，不会上传任何用户数据。</string>
     <string name="voice_listening">请说话…</string>
     <string name="voice_error">语音识别失败，请重试</string>
+    <string name="setup_step1">第一步：启用墨奇输入法\n\n请前往系统设置中启用墨奇输入法</string>
+    <string name="setup_step2">第二步：选择墨奇输入法\n\n墨奇输入法已启用，请在输入法选择器中选择它</string>
+    <string name="setup_done">墨奇输入法已就绪！\n\n您可以在任意输入框中切换到墨奇输入法使用</string>
+    <string name="setup_guide">墨奇输入法 — 本地运行，隐私安全\n\n1. 在系统设置中启用墨奇输入法\n2. 在输入法选择器中切换到墨奇输入法\n3. 开始使用！</string>
+    <string name="setup_enable">启用输入法</string>
+    <string name="setup_select">选择输入法</string>
+    <string name="setup_go_settings">输入法设置</string>
 </resources>
