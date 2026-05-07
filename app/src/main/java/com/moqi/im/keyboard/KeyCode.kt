@@ -14,6 +14,8 @@ object KeyCode {
     const val RETYPE = -110
     const val NUMBER_LAYOUT = -111
     const val SYMBOL_LAYOUT = -112
+    const val RETURN_TO_TEXT = -113
+    const val TEXT_DOT_COM = -114
     const val T9_1 = -201
     const val T9_2 = -202
     const val T9_3 = -203

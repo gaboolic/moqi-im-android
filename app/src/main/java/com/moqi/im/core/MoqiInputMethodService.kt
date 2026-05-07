@@ -215,8 +215,10 @@ class MoqiInputMethodService : InputMethodService() {
             }
             KeyCode.MENU -> showMenuPanel()
             KeyCode.RETYPE -> clearTextEngineState()
-            KeyCode.SYMBOL_LAYOUT -> showMessage("符号键盘暂未实现")
-            KeyCode.NUMBER_LAYOUT -> showMessage("数字键盘暂未实现")
+            KeyCode.SYMBOL_LAYOUT -> keyboardView?.setLayout(KeyboardView.Layout.SYMBOL)
+            KeyCode.NUMBER_LAYOUT -> keyboardView?.setLayout(KeyboardView.Layout.NUMBER)
+            KeyCode.RETURN_TO_TEXT -> updateKeyboard()
+            KeyCode.TEXT_DOT_COM -> commitText(".com")
             KeyCode.EXIT_VOICE -> exitVoiceMode()
             KeyCode.COMMA -> {
                 submitMoqiKey(','.code, ','.code, fallbackOnSuccessOnly = true) {

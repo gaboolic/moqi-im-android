@@ -17,7 +17,7 @@ class KeyboardView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     enum class Layout {
-        QWERTY_CN, QWERTY_EN, T9_CN, T9_EN, VOICE
+        QWERTY_CN, QWERTY_EN, T9_CN, T9_EN, NUMBER, SYMBOL, VOICE
     }
 
     private val keyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -61,6 +61,8 @@ class KeyboardView @JvmOverloads constructor(
             Layout.QWERTY_EN -> qwertyEnRows()
             Layout.T9_CN -> t9CnRows()
             Layout.T9_EN -> t9EnRows()
+            Layout.NUMBER -> numberRows()
+            Layout.SYMBOL -> symbolRows()
             Layout.VOICE -> voiceRows()
         }
         requestLayout()
@@ -111,10 +113,10 @@ class KeyboardView @JvmOverloads constructor(
     private fun updatePaintColors() {
         val dark = isDarkMode
         labelPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
-        labelPaint.textSize = if (isT9Layout()) 38f else 42f
+        labelPaint.textSize = if (isT9Layout() || isNumberOrSymbolLayout()) 38f else 42f
         labelPaint.textAlign = Paint.Align.CENTER
         subLabelPaint.color = if (dark) 0xFF9090AA.toInt() else 0xFF606080.toInt()
-        subLabelPaint.textSize = if (isT9Layout()) 16f else 14f
+        subLabelPaint.textSize = if (isT9Layout() || isNumberOrSymbolLayout()) 16f else 14f
         subLabelPaint.textAlign = Paint.Align.CENTER
         specialKeyPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
         specialKeyPaint.textSize = 28f
@@ -370,6 +372,9 @@ class KeyboardView @JvmOverloads constructor(
     private fun isT9Layout(): Boolean =
         currentLayout == Layout.T9_CN || currentLayout == Layout.T9_EN
 
+    private fun isNumberOrSymbolLayout(): Boolean =
+        currentLayout == Layout.NUMBER || currentLayout == Layout.SYMBOL
+
     private fun isT9InputKey(keyCode: Int): Boolean =
         keyCode in KeyCode.T9_POUND..KeyCode.T9_1
 
@@ -451,6 +456,75 @@ class KeyboardView @JvmOverloads constructor(
             KeyDefinition("En/中", KeyCode.MODE_SWITCH, 0.66f),
             KeyDefinition("...", KeyCode.MENU, 0.66f),
             KeyDefinition("↵", KeyCode.ENTER, 0.66f)
+        )
+    )
+
+    private fun numberRows(): List<List<KeyDefinition>> = listOf(
+        listOf(
+            KeyDefinition("+", '+'.code, 0.72f),
+            KeyDefinition("1", '1'.code, 1f),
+            KeyDefinition("2", '2'.code, 1f),
+            KeyDefinition("3", '3'.code, 1f),
+            KeyDefinition("⌫", KeyCode.DELETE, 0.72f, isRepeatable = true)
+        ),
+        listOf(
+            KeyDefinition("-", '-'.code, 0.72f),
+            KeyDefinition("4", '4'.code, 1f),
+            KeyDefinition("5", '5'.code, 1f),
+            KeyDefinition("6", '6'.code, 1f),
+            KeyDefinition(".", '.'.code, 0.72f)
+        ),
+        listOf(
+            KeyDefinition("*", '*'.code, 0.72f),
+            KeyDefinition("7", '7'.code, 1f),
+            KeyDefinition("8", '8'.code, 1f),
+            KeyDefinition("9", '9'.code, 1f),
+            KeyDefinition("@", '@'.code, 0.72f)
+        ),
+        listOf(
+            KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 0.72f),
+            KeyDefinition("返回", KeyCode.RETURN_TO_TEXT, 0.72f),
+            KeyDefinition("0", '0'.code, 1.5f),
+            KeyDefinition("空格", KeyCode.SPACE, 0.72f),
+            KeyDefinition("↵", KeyCode.ENTER, 0.72f)
+        )
+    )
+
+    private fun symbolRows(): List<List<KeyDefinition>> = listOf(
+        listOf(
+            KeyDefinition("常用", KeyCode.SYMBOL_LAYOUT, 0.72f),
+            KeyDefinition("-", '-'.code, 1f),
+            KeyDefinition("，", ','.code, 1f),
+            KeyDefinition("。", '.'.code, 1f),
+            KeyDefinition("?", '?'.code, 1f)
+        ),
+        listOf(
+            KeyDefinition("英文", KeyCode.SYMBOL_LAYOUT, 0.72f),
+            KeyDefinition("!", '!'.code, 1f),
+            KeyDefinition("✓", '✓'.code, 1f),
+            KeyDefinition("×", '×'.code, 1f),
+            KeyDefinition("@", '@'.code, 1f)
+        ),
+        listOf(
+            KeyDefinition("中文", KeyCode.SYMBOL_LAYOUT, 0.72f),
+            KeyDefinition(".", '.'.code, 1f),
+            KeyDefinition("~", '~'.code, 1f),
+            KeyDefinition("#", '#'.code, 1f),
+            KeyDefinition("_", '_'.code, 1f)
+        ),
+        listOf(
+            KeyDefinition("网络", KeyCode.SYMBOL_LAYOUT, 0.72f),
+            KeyDefinition("'", '\''.code, 1f),
+            KeyDefinition(".com", KeyCode.TEXT_DOT_COM, 1f),
+            KeyDefinition(":", ':'.code, 1f),
+            KeyDefinition("*", '*'.code, 1f)
+        ),
+        listOf(
+            KeyDefinition("返回", KeyCode.RETURN_TO_TEXT, 1f),
+            KeyDefinition("123", KeyCode.NUMBER_LAYOUT, 1f),
+            KeyDefinition("⌃", KeyCode.SYMBOL_LAYOUT, 1f),
+            KeyDefinition("⌄", KeyCode.SYMBOL_LAYOUT, 1f),
+            KeyDefinition("⌫", KeyCode.DELETE, 1f, isRepeatable = true)
         )
     )
 
