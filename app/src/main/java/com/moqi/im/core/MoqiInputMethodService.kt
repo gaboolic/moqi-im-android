@@ -86,6 +86,7 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private var currentMode: InputMode = InputMode.PINYIN
+    private var lastChineseMode: InputMode = InputMode.PINYIN
     private lateinit var engineRunner: MoqiImeEngineRunner
     private var composingText: StringBuilder = StringBuilder()
     private var currentSchemaId: String = ""
@@ -244,6 +245,9 @@ class MoqiInputMethodService : InputMethodService() {
         }
         candidateView?.setOnExpandedLoadNextPageListener {
             loadNextExpandedCandidatePage()
+        }
+        candidateView?.setOnMenuClickListener {
+            showMenuPanel()
         }
 
         updateKeyboard()
@@ -499,10 +503,16 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun cycleInputMode() {
-        val textModes = listOf(InputMode.PINYIN, InputMode.WUBI, InputMode.ENGLISH)
         val currentTextMode = if (currentMode == InputMode.VOICE) modeBeforeVoice else currentMode
-        val nextIndex = (textModes.indexOf(currentTextMode) + 1) % textModes.size
-        switchMode(textModes[nextIndex])
+        val targetMode = if (currentTextMode == InputMode.ENGLISH) {
+            lastChineseMode
+        } else {
+            if (currentTextMode == InputMode.PINYIN || currentTextMode == InputMode.WUBI) {
+                lastChineseMode = currentTextMode
+            }
+            InputMode.ENGLISH
+        }
+        switchMode(targetMode)
     }
 
     private fun enterVoiceMode() {
@@ -619,6 +629,9 @@ class MoqiInputMethodService : InputMethodService() {
 
     private fun switchMode(mode: InputMode) {
         if (currentMode == InputMode.VOICE) stopVoiceListening()
+        if (mode == InputMode.PINYIN || mode == InputMode.WUBI) {
+            lastChineseMode = mode
+        }
         currentMode = mode
         shiftActive = false
         shiftLocked = false
@@ -1131,6 +1144,9 @@ class MoqiInputMethodService : InputMethodService() {
             "wubi" -> InputMode.WUBI
             "english" -> InputMode.ENGLISH
             else -> InputMode.PINYIN
+        }
+        if (currentMode == InputMode.PINYIN || currentMode == InputMode.WUBI) {
+            lastChineseMode = currentMode
         }
     }
 

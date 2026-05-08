@@ -67,6 +67,7 @@ class CandidateView @JvmOverloads constructor(
     private var onExpandedChanged: ((Boolean) -> Unit)? = null
     private var onCandidatePageChange: ((Boolean) -> Unit)? = null
     private var onExpandedLoadNextPage: (() -> Unit)? = null
+    private var onMenuClick: (() -> Unit)? = null
 
     private val isDarkMode: Boolean
         get() = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
@@ -121,6 +122,10 @@ class CandidateView @JvmOverloads constructor(
 
     fun setOnExpandedLoadNextPageListener(listener: () -> Unit) {
         onExpandedLoadNextPage = listener
+    }
+
+    fun setOnMenuClickListener(listener: () -> Unit) {
+        onMenuClick = listener
     }
 
     fun appendExpandedCandidateEntries(pageIndex: Int, entries: List<CandidateEntry>) {
@@ -215,7 +220,12 @@ class CandidateView @JvmOverloads constructor(
             commentPaint.color = if (isDarkMode) 0xFF858C94.toInt() else 0xFF8A929C.toInt()
             commentPaint.textAlign = Paint.Align.CENTER
             val baseline = height / 2f - (commentPaint.descent() + commentPaint.ascent()) / 2f
-            canvas.drawText("墨奇输入法", width / 2f, baseline, commentPaint)
+            canvas.drawText("墨奇输入法", moreButtonRect.left / 2f, baseline, commentPaint)
+            if (moreButtonPressed) {
+                canvas.drawRoundRect(moreButtonRect, dp(6f), dp(6f), highlightPaint)
+            }
+            canvas.drawLine(moreButtonRect.left, dp(8f), moreButtonRect.left, height - dp(8f), dividerPaint)
+            canvas.drawText("...", moreButtonRect.centerX(), baseline, commentPaint)
             commentPaint.textAlign = Paint.Align.LEFT
         }
     }
@@ -262,7 +272,8 @@ class CandidateView @JvmOverloads constructor(
                 isDragging = false
                 pageChangeRequested = false
                 pressedControl = findControlAt(event.x, event.y)
-                moreButtonPressed = (pressedControl >= 0 || moreButtonRect.contains(event.x, event.y)) && candidates.isNotEmpty()
+                moreButtonPressed = (pressedControl >= 0 || moreButtonRect.contains(event.x, event.y)) &&
+                    (candidates.isNotEmpty() || !expanded)
                 pressedIndex = if (moreButtonPressed) -1 else findItemAt(touchContentX(event.x), touchContentY(event.y))
                 invalidate()
                 return true
@@ -312,7 +323,11 @@ class CandidateView @JvmOverloads constructor(
                             CONTROL_SCROLL_DOWN -> scrollExpandedPage(forward = true)
                         }
                     } else if (!expanded && moreButtonRect.contains(event.x, event.y)) {
-                        setExpanded(true)
+                        if (candidates.isEmpty()) {
+                            onMenuClick?.invoke()
+                        } else {
+                            setExpanded(true)
+                        }
                     }
                     moreButtonPressed = false
                     pressedControl = -1
@@ -360,7 +375,7 @@ class CandidateView @JvmOverloads constructor(
 
     private fun calculateItemRects(totalWidth: Int, totalHeight: Float = height.toFloat()) {
         val padding = dp(4f)
-        val moreButtonWidth = if (candidates.isEmpty()) 0f else dp(48f)
+        val moreButtonWidth = dp(48f)
         val contentWidth = (totalWidth - moreButtonWidth).coerceAtLeast(0f)
         moreButtonRect = RectF(contentWidth, 0f, totalWidth.toFloat(), totalHeight)
         if (expanded) {

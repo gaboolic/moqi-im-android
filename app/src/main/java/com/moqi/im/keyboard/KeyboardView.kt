@@ -479,15 +479,15 @@ class KeyboardView @JvmOverloads constructor(
 
     private fun qwertyCnRows(): List<List<KeyDefinition>> = listOf(
         rowOf("qwertyuiop", "1234567890"),
-        rowOf("asdfghjkl", listOf("~", "!", "@", "#", "%", "“”", "（）", "*", "?")),
-        rowOfWithExtras("zxcvbnm", listOf("`", "+", "-", "_", "：", "；", "/")),
+        rowOf("asdfghjkl", listOf("~", "!", "@", "#", "%", "“”", "（）", "*", "_")),
+        rowOfWithExtras("zxcvbnm", listOf("`", "+", "-", "?", "：", "；", "/")),
         bottomRowCn()
     )
 
     private fun qwertyEnRows(): List<List<KeyDefinition>> = listOf(
         rowOf("qwertyuiop", "1234567890"),
-        rowOf("asdfghjkl", listOf("~", "!", "@", "#", "%", "\"\"", "()", "*", "?")),
-        rowOfWithExtras("zxcvbnm", listOf("`", "+", "-", "_", ":", ";", "/")),
+        rowOf("asdfghjkl", listOf("~", "!", "@", "#", "%", "\"\"", "()", "*", "_")),
+        rowOfWithExtras("zxcvbnm", listOf("`", "+", "-", "?", ":", ";", "/")),
         bottomRowEn()
     )
 
@@ -518,7 +518,7 @@ class KeyboardView @JvmOverloads constructor(
             KeyDefinition("123", KeyCode.NUMBER_LAYOUT, 0.66f),
             KeyDefinition("空格 🎤", KeyCode.SPACE, 1.5f),
             KeyDefinition("中/英", KeyCode.MODE_SWITCH, 0.66f),
-            KeyDefinition("...", KeyCode.MENU, 0.66f),
+            KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 0.66f),
             KeyDefinition("↵", KeyCode.ENTER, 0.66f)
         )
     )
@@ -550,7 +550,7 @@ class KeyboardView @JvmOverloads constructor(
             KeyDefinition("123", KeyCode.NUMBER_LAYOUT, 0.66f),
             KeyDefinition("Space 🎤", KeyCode.SPACE, 1.5f),
             KeyDefinition("En/中", KeyCode.MODE_SWITCH, 0.66f),
-            KeyDefinition("...", KeyCode.MENU, 0.66f),
+            KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 0.66f),
             KeyDefinition("↵", KeyCode.ENTER, 0.66f)
         )
     )
@@ -692,7 +692,7 @@ class KeyboardView @JvmOverloads constructor(
         KeyDefinition("，", KeyCode.COMMA, 1f),
         KeyDefinition("空格 🎤", KeyCode.SPACE, 6f),
         KeyDefinition("。", KeyCode.PERIOD, 1f),
-        KeyDefinition("...", KeyCode.MENU, 1f),
+        KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 1f),
         KeyDefinition("↵", KeyCode.ENTER, 1.5f)
     )
 
@@ -701,7 +701,7 @@ class KeyboardView @JvmOverloads constructor(
         KeyDefinition(",", KeyCode.COMMA, 1f),
         KeyDefinition("Space 🎤", KeyCode.SPACE, 6f),
         KeyDefinition(".", KeyCode.PERIOD, 1f),
-        KeyDefinition("...", KeyCode.MENU, 1f),
+        KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 1f),
         KeyDefinition("↵", KeyCode.ENTER, 1.5f)
     )
 
@@ -723,7 +723,7 @@ class KeyboardView @JvmOverloads constructor(
         listOf(
             KeyDefinition("返回键盘", KeyCode.EXIT_VOICE, 4f),
             KeyDefinition("中/英", KeyCode.MODE_SWITCH, 4f),
-            KeyDefinition("...", KeyCode.MENU, 4f)
+            KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 4f)
         ),
         listOf(
             KeyDefinition("长按空格语音", KeyCode.EXIT_VOICE, 4f),
