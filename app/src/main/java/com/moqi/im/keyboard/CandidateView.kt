@@ -36,6 +36,7 @@ class CandidateView @JvmOverloads constructor(
     private var candidates: List<CandidateEntry> = emptyList()
     private var currentPageCandidates: List<CandidateEntry> = emptyList()
     private val expandedCandidates = mutableListOf<ExpandedCandidate>()
+    private var expandedGridStartIndex: Int = 0
     private var itemRects: List<RectF> = emptyList()
     private var controlRects: List<RectF> = emptyList()
     private var moreButtonRect = RectF()
@@ -144,27 +145,31 @@ class CandidateView @JvmOverloads constructor(
 
         canvas.save()
         canvas.clipRect(0f, 0f, moreButtonRect.left, height.toFloat())
-        if (expanded) {
-            canvas.translate(0f, -scrollOffset)
-        } else {
+        if (!expanded) {
             canvas.translate(-scrollOffset, 0f)
         }
         for ((i, rect) in itemRects.withIndex()) {
             if (i >= candidates.size) break
             if (!expanded && (rect.right < scrollOffset || rect.left > scrollOffset + moreButtonRect.left)) continue
-            if (expanded && (rect.bottom < scrollOffset || rect.top > scrollOffset + height)) continue
+            val drawRect = if (expanded) visualRect(rect) else rect
+            if (expanded && (drawRect.bottom < candidateBarHeight() || drawRect.top > height)) continue
 
             val candidate = candidates[i]
             val isSelected = i == pressedIndex
 
             canvas.save()
-            canvas.clipRect(rect.left + dp(1f), rect.top, rect.right - dp(1f), rect.bottom)
+            val clipTop = if (expanded && rect.top >= candidateBarHeight()) {
+                drawRect.top.coerceAtLeast(candidateBarHeight())
+            } else {
+                drawRect.top
+            }
+            canvas.clipRect(drawRect.left + dp(1f), clipTop, drawRect.right - dp(1f), drawRect.bottom)
             if (isSelected) {
-                canvas.drawRoundRect(rect, dp(6f), dp(6f), highlightPaint)
+                canvas.drawRoundRect(drawRect, dp(6f), dp(6f), highlightPaint)
             }
 
-            val textX = rect.left + dp(12f)
-            val textBaseline = rect.centerY() - (textPaint.descent() + textPaint.ascent()) / 2f
+            val textX = drawRect.left + dp(12f)
+            val textBaseline = drawRect.centerY() - (textPaint.descent() + textPaint.ascent()) / 2f
             canvas.drawText(candidate.text, textX, textBaseline, textPaint)
             if (candidate.comment.isNotBlank()) {
                 val commentX = textX + textPaint.measureText(candidate.text) + dp(7f)
@@ -172,7 +177,12 @@ class CandidateView @JvmOverloads constructor(
             }
             canvas.restore()
             if (i < itemRects.lastIndex) {
-                canvas.drawLine(rect.right, dp(8f), rect.right, height - dp(8f), dividerPaint)
+                val lineTop = if (expanded && rect.top >= candidateBarHeight()) {
+                    drawRect.top.coerceAtLeast(candidateBarHeight()) + dp(8f)
+                } else {
+                    drawRect.top + dp(8f)
+                }
+                canvas.drawLine(drawRect.right, lineTop, drawRect.right, drawRect.bottom - dp(8f), dividerPaint)
             }
         }
         canvas.restore()
@@ -206,6 +216,12 @@ class CandidateView @JvmOverloads constructor(
             ?: resources.getDimension(R.dimen.candidate_height)
         calculateItemRects(width, h)
         setMeasuredDimension(width, h.toInt())
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        calculateItemRects(w, h.toFloat())
+        invalidate()
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -263,9 +279,9 @@ class CandidateView @JvmOverloads constructor(
                     val control = findControlAt(event.x, event.y)
                     if (expanded && control == pressedControl) {
                         when (control) {
+                            CONTROL_COLLAPSE -> setExpanded(false)
                             CONTROL_SCROLL_UP -> scrollExpandedPage(forward = false)
                             CONTROL_SCROLL_DOWN -> scrollExpandedPage(forward = true)
-                            CONTROL_COLLAPSE -> setExpanded(false)
                         }
                     } else if (!expanded && moreButtonRect.contains(event.x, event.y)) {
                         setExpanded(true)
@@ -313,17 +329,36 @@ class CandidateView @JvmOverloads constructor(
         if (expanded) {
             val columns = 3
             val itemGap = dp(4f)
+            val headerHeight = candidateBarHeight()
             val rowHeight = dp(42f)
             val itemWidth = ((contentWidth - padding * 2 - itemGap * (columns - 1)) / columns).coerceAtLeast(dp(62f))
-            itemRects = candidates.mapIndexed { index, _ ->
-                val row = index / columns
-                val col = index % columns
+            var x = padding
+            val rects = mutableListOf<RectF>()
+            expandedGridStartIndex = candidates.indexOfFirst { candidate ->
+                val desiredWidth = dp(24f) +
+                    textPaint.measureText(candidate.text) +
+                    if (candidate.comment.isBlank()) 0f else dp(8f) + commentPaint.measureText(candidate.comment)
+                val itemWidthInHeader = desiredWidth.coerceAtLeast(dp(54f))
+                if (x + itemWidthInHeader <= contentWidth || rects.isEmpty()) {
+                    rects += RectF(x, 0f, x + itemWidthInHeader, headerHeight)
+                    x += itemWidthInHeader
+                    false
+                } else {
+                    true
+                }
+            }.takeIf { it >= 0 } ?: candidates.size
+            for (index in expandedGridStartIndex until candidates.size) {
+                val gridIndex = index - expandedGridStartIndex
+                val row = gridIndex / columns
+                val col = gridIndex % columns
                 val left = padding + col * (itemWidth + itemGap)
-                val top = padding + row * rowHeight
-                RectF(left, top, left + itemWidth, top + rowHeight)
+                val top = headerHeight + padding + row * rowHeight
+                rects += RectF(left, top, left + itemWidth, top + rowHeight)
             }
-            val rowCount = ((candidates.size + columns - 1) / columns).coerceAtLeast(1)
-            val contentHeight = padding * 2 + rowCount * rowHeight
+            itemRects = rects
+            val gridCount = (candidates.size - expandedGridStartIndex).coerceAtLeast(0)
+            val rowCount = ((gridCount + columns - 1) / columns).coerceAtLeast(0)
+            val contentHeight = headerHeight + padding * 2 + rowCount * rowHeight
             maxScrollOffset = (contentHeight - totalHeight).coerceAtLeast(0f)
             scrollOffset = scrollOffset.coerceIn(0f, maxScrollOffset)
         } else {
@@ -359,6 +394,9 @@ class CandidateView @JvmOverloads constructor(
             expandedCandidates.clear()
         }
         onExpandedChanged?.invoke(expanded)
+        if (expanded) {
+            onExpandedLoadNextPage?.invoke()
+        }
         requestLayout()
         invalidate()
     }
@@ -368,11 +406,14 @@ class CandidateView @JvmOverloads constructor(
             controlRects = emptyList()
             return
         }
-        val controlHeight = moreButtonRect.height() / 3f
-        controlRects = (0 until 3).map { index ->
-            val top = moreButtonRect.top + index * controlHeight
-            RectF(moreButtonRect.left, top, moreButtonRect.right, top + controlHeight)
-        }
+        val headerHeight = candidateBarHeight().coerceAtMost(moreButtonRect.height())
+        val remainingHeight = (moreButtonRect.height() - headerHeight).coerceAtLeast(0f)
+        val scrollControlHeight = remainingHeight / 2f
+        controlRects = listOf(
+            RectF(moreButtonRect.left, 0f, moreButtonRect.right, headerHeight),
+            RectF(moreButtonRect.left, headerHeight, moreButtonRect.right, headerHeight + scrollControlHeight),
+            RectF(moreButtonRect.left, headerHeight + scrollControlHeight, moreButtonRect.right, moreButtonRect.bottom)
+        )
     }
 
     private fun drawMoreArrow(canvas: Canvas) {
@@ -390,7 +431,7 @@ class CandidateView @JvmOverloads constructor(
     }
 
     private fun drawExpandedControls(canvas: Canvas) {
-        val labels = listOf("⌃", "⌄", "×")
+        val labels = listOf("", "⌃", "⌄")
         val baselineOffset = -(commentPaint.descent() + commentPaint.ascent()) / 2f
         commentPaint.textAlign = Paint.Align.CENTER
         commentPaint.color = if (isDarkMode) 0xFFB8C0C8.toInt() else 0xFF69727D.toInt()
@@ -401,9 +442,27 @@ class CandidateView @JvmOverloads constructor(
             if (index > 0) {
                 canvas.drawLine(rect.left + dp(8f), rect.top, rect.right - dp(8f), rect.top, dividerPaint)
             }
-            canvas.drawText(labels[index], rect.centerX(), rect.centerY() + baselineOffset, commentPaint)
+            if (index == CONTROL_COLLAPSE) {
+                drawCollapseArrow(canvas, rect)
+            } else {
+                canvas.drawText(labels[index], rect.centerX(), rect.centerY() + baselineOffset, commentPaint)
+            }
         }
         commentPaint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawCollapseArrow(canvas: Canvas, rect: RectF) {
+        val cx = rect.centerX()
+        val cy = rect.centerY() - dp(1f)
+        val halfWidth = dp(8f)
+        val halfHeight = dp(5f)
+        val path = Path().apply {
+            moveTo(cx - halfWidth, cy + halfHeight)
+            lineTo(cx + halfWidth, cy + halfHeight)
+            lineTo(cx, cy - halfHeight)
+            close()
+        }
+        canvas.drawPath(path, arrowPaint)
     }
 
     private fun requestPageChangeAtExpandedEdge(dy: Float) {
@@ -443,7 +502,17 @@ class CandidateView @JvmOverloads constructor(
 
     private fun touchContentX(x: Float): Float = if (expanded) x else x + scrollOffset
 
-    private fun touchContentY(y: Float): Float = if (expanded) y + scrollOffset else y
+    private fun touchContentY(y: Float): Float {
+        if (!expanded) return y
+        return if (y <= candidateBarHeight()) y else y + scrollOffset
+    }
+
+    private fun visualRect(rect: RectF): RectF {
+        if (!expanded || rect.bottom <= candidateBarHeight()) return rect
+        return RectF(rect.left, rect.top - scrollOffset, rect.right, rect.bottom - scrollOffset)
+    }
+
+    private fun candidateBarHeight(): Float = resources.getDimension(R.dimen.candidate_height)
 
     private fun dp(value: Float): Float = value * resources.displayMetrics.density
 
@@ -456,9 +525,9 @@ class CandidateView @JvmOverloads constructor(
     companion object {
         private const val DARK_BG = 0xFF20262C.toInt()
         private const val LIGHT_BG = 0xFFF7F8FA.toInt()
-        private const val CONTROL_SCROLL_UP = 0
-        private const val CONTROL_SCROLL_DOWN = 1
-        private const val CONTROL_COLLAPSE = 2
+        private const val CONTROL_COLLAPSE = 0
+        private const val CONTROL_SCROLL_UP = 1
+        private const val CONTROL_SCROLL_DOWN = 2
     }
 
     private data class ExpandedCandidate(

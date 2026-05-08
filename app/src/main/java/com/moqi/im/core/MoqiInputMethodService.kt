@@ -107,6 +107,7 @@ class MoqiInputMethodService : InputMethodService() {
     private var isEngineInitializing: Boolean = true
     private var expandedCandidatePageIndex: Int = 0
     private var isExpandedCandidateLoading: Boolean = false
+    private var expandedCandidateInitialPrefetchRemaining: Int = 0
 
     private val handler = Handler(Looper.getMainLooper())
     private val downloadExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -850,6 +851,12 @@ class MoqiInputMethodService : InputMethodService() {
         if (expanded) {
             expandedCandidatePageIndex = 0
             isExpandedCandidateLoading = false
+            expandedCandidateInitialPrefetchRemaining = 2
+        } else {
+            expandedCandidateInitialPrefetchRemaining = 0
+        }
+        if (keyboardMenuView?.visibility != View.VISIBLE) {
+            keyboardView?.visibility = if (expanded) View.GONE else View.VISIBLE
         }
         val targetHeight = if (expanded) {
             inputPanelView?.height?.takeIf { it > 0 } ?: dp(260)
@@ -862,13 +869,17 @@ class MoqiInputMethodService : InputMethodService() {
             view.layoutParams = params
         }
         if (keyboardMenuView?.visibility != View.VISIBLE) {
-            keyboardView?.visibility = if (expanded) View.GONE else View.VISIBLE
             if (!expanded) {
                 updateKeyboard()
             }
         }
         if (expanded) {
             view.bringToFront()
+        }
+        inputPanelView?.requestLayout()
+        view.post {
+            view.requestLayout()
+            view.invalidate()
         }
     }
 
@@ -879,21 +890,31 @@ class MoqiInputMethodService : InputMethodService() {
         }
         if (isExpandedCandidateLoading) return
         isExpandedCandidateLoading = true
+        val isInitialPrefetch = expandedCandidateInitialPrefetchRemaining > 0
         engineRunner.changeCandidatePage(backward = false) { engineResult ->
             val result = engineResult.result
             if (!result.success) {
                 isExpandedCandidateLoading = false
+                expandedCandidateInitialPrefetchRemaining = 0
                 applyMoqiResult(result)
                 return@changeCandidatePage
             }
             isExpandedCandidateLoading = false
             if (result.handled && result.showCandidates && result.candidateEntries.isNotEmpty()) {
                 expandedCandidatePageIndex += 1
+                if (isInitialPrefetch) {
+                    expandedCandidateInitialPrefetchRemaining =
+                        (expandedCandidateInitialPrefetchRemaining - 1).coerceAtLeast(0)
+                }
                 candidateView?.appendExpandedCandidateEntries(
                     pageIndex = expandedCandidatePageIndex,
                     entries = result.candidateEntries
                 )
+                if (expandedCandidateInitialPrefetchRemaining > 0) {
+                    handler.post { loadNextExpandedCandidatePage() }
+                }
             } else {
+                expandedCandidateInitialPrefetchRemaining = 0
                 candidateView?.appendExpandedCandidateEntries(
                     pageIndex = expandedCandidatePageIndex,
                     entries = emptyList()
