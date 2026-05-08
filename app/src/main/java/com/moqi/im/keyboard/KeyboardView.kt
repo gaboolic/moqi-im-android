@@ -29,6 +29,7 @@ class KeyboardView @JvmOverloads constructor(
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val subLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val specialKeyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val sidePanelTextPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     private var keyWidth: Float = 0f
@@ -172,7 +173,7 @@ class KeyboardView @JvmOverloads constructor(
         canvas.drawRoundRect(t9SidePanelRect, cornerRadius, cornerRadius, keyPaint)
 
         val itemHeight = t9SidePanelRect.height() / T9_VISIBLE_SIDE_ITEMS
-        val baselineOffset = -(labelPaint.descent() + labelPaint.ascent()) / 2f
+        val baselineOffset = -(sidePanelTextPaint.descent() + sidePanelTextPaint.ascent()) / 2f
         canvas.save()
         canvas.clipRect(t9SidePanelRect)
         items.forEachIndexed { index, key ->
@@ -180,7 +181,7 @@ class KeyboardView @JvmOverloads constructor(
             if (centerY + itemHeight / 2f < t9SidePanelRect.top || centerY - itemHeight / 2f > t9SidePanelRect.bottom) {
                 return@forEachIndexed
             }
-            canvas.drawText(key.label, t9SidePanelRect.centerX(), centerY + baselineOffset, labelPaint)
+            canvas.drawText(key.label, t9SidePanelRect.centerX(), centerY + baselineOffset, sidePanelTextPaint)
         }
         canvas.restore()
         if (items.size > T9_VISIBLE_SIDE_ITEMS) {
@@ -216,6 +217,9 @@ class KeyboardView @JvmOverloads constructor(
         specialKeyPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
         specialKeyPaint.textSize = dp(16f)
         specialKeyPaint.textAlign = Paint.Align.CENTER
+        sidePanelTextPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
+        sidePanelTextPaint.textSize = sp(T9_SIDE_PANEL_TEXT_SIZE_SP)
+        sidePanelTextPaint.textAlign = Paint.Align.CENTER
         iconPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
         val bgColor = if (dark) 0xFF1A1A2E.toInt() else 0xFFF0F0F5.toInt()
         setBackgroundColor(bgColor)
@@ -612,6 +616,7 @@ class KeyboardView @JvmOverloads constructor(
         private const val SWIPE_INPUT_THRESHOLD_DP = 36f
         private const val MAIN_LETTER_TEXT_SIZE_SP = 21f
         private const val SYMBOL_TEXT_SIZE_SP = 23f
+        private const val T9_SIDE_PANEL_TEXT_SIZE_SP = 14f
         private const val T9_VISIBLE_SIDE_ITEMS = 4
     }
 

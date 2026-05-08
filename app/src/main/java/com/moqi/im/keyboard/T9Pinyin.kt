@@ -54,8 +54,13 @@ object T9Pinyin {
         val segments = mutableListOf<String>()
         var index = 0
         while (index < digits.length) {
+            if (digits[index] == '1') {
+                index++
+                continue
+            }
             var matched: String? = null
-            val maxLength = minOf(6, digits.length - index)
+            val nextSeparator = digits.indexOf('1', startIndex = index).takeIf { it >= 0 } ?: digits.length
+            val maxLength = minOf(6, nextSeparator - index)
             for (length in maxLength downTo 1) {
                 val candidate = digits.substring(index, index + length)
                 if (pinyinByDigits.containsKey(candidate)) {

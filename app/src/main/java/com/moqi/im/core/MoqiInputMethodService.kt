@@ -435,6 +435,7 @@ class MoqiInputMethodService : InputMethodService() {
 
     private fun handleT9Pinyin(keyCode: Int) {
         val digit = when (keyCode) {
+            KeyCode.T9_1 -> '1'
             KeyCode.T9_2 -> '2'
             KeyCode.T9_3 -> '3'
             KeyCode.T9_4 -> '4'
@@ -445,8 +446,16 @@ class MoqiInputMethodService : InputMethodService() {
             KeyCode.T9_9 -> '9'
             else -> return
         }
+        if (digit == '1' && (t9PinyinDigits.isEmpty() || t9PinyinDigits.last() == '1')) {
+            return
+        }
+        val previousWasSeparator = t9PinyinDigits.lastOrNull() == '1'
         t9PinyinDigits.append(digit)
-        t9ActiveSegmentIndex = 0
+        val segmentLastIndex = t9Segments().lastIndex.coerceAtLeast(0)
+        t9ActiveSegmentIndex = when {
+            digit == '1' || previousWasSeparator -> segmentLastIndex
+            else -> t9ActiveSegmentIndex.coerceIn(0, segmentLastIndex)
+        }
         t9SelectedPinyinBySegment.keys
             .filter { it >= t9Segments().size }
             .forEach { t9SelectedPinyinBySegment.remove(it) }
@@ -454,9 +463,10 @@ class MoqiInputMethodService : InputMethodService() {
             .filter { it >= t9Segments().size }
             .forEach { t9InferredPinyinBySegment.remove(it) }
         updateT9PinyinOptions()
-        submitMoqiKey(digit.code, digit.code) {
+        val engineChar = if (digit == '1') '\'' else digit
+        submitMoqiKey(engineChar.code, engineChar.code) {
             if (currentMode == InputMode.ENGLISH) {
-                commitText(digit.toString())
+                commitText(engineChar.toString())
             }
         }
     }
@@ -469,7 +479,7 @@ class MoqiInputMethodService : InputMethodService() {
         t9SelectedPinyinBySegment[segmentIndex] = pinyin
         t9ActiveSegmentIndex = (segmentIndex + 1).coerceAtMost(segments.lastIndex)
         updateT9PinyinOptions()
-        val replayText = t9DisplayComposition().replace("'", "")
+        val replayText = t9DisplayComposition()
         engineRunner.resetComposition {
             composingText.clear()
             candidateView?.setCandidates(emptyList())
