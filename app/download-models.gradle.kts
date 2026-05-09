@@ -5,7 +5,7 @@
 
 import java.util.zip.ZipInputStream
 
-val modelsDir = file("src/main/assets/models/sherpa")
+val modelsDir = file("src/full/assets/models/sherpa")
 val modelName = "sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
 val modelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$modelName.tar.bz2"
 val modelArchive = file("build/sherpa-model.tar.bz2")
@@ -42,11 +42,11 @@ tasks.register<Exec>("downloadSherpaModels") {
     }
 }
 
-// 在 mergeDebugAssets 之前执行下载任务
-tasks.named("mergeDebugAssets").configure {
+// 仅在 full 变体合并资源前下载（精简包不含语音模型）
+tasks.named("mergeFullDebugAssets").configure {
     dependsOn("downloadSherpaModels")
 }
 
-tasks.named("mergeReleaseAssets").configure {
+tasks.named("mergeFullReleaseAssets").configure {
     dependsOn("downloadSherpaModels")
 }

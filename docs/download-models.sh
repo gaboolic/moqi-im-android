@@ -4,7 +4,7 @@
 
 set -e
 
-MODELS_DIR="../app/src/main/assets/models/sherpa"
+MODELS_DIR="../app/src/full/assets/models/sherpa"
 MODEL_NAME="sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
 MODEL_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${MODEL_NAME}.tar.bz2"
 MODEL_FILE="model.tar.bz2"
@@ -87,4 +87,4 @@ ls -lh "$MODELS_DIR"
 
 echo ""
 echo "提示: 模型已放入 assets 目录，构建 APK 时会自动集成"
-echo "      下次构建: ./gradlew assembleDebug"
+echo "      下次构建 full 包: ./gradlew assembleFullDebug"

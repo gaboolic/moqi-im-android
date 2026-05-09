@@ -13,6 +13,7 @@ import android.view.View
 import android.view.VelocityTracker
 import android.view.ViewConfiguration
 import android.widget.OverScroller
+import com.moqi.im.BuildConfig
 import com.moqi.im.R
 
 class KeyboardView @JvmOverloads constructor(
@@ -744,7 +745,7 @@ class KeyboardView @JvmOverloads constructor(
         listOf(
             KeyDefinition("中/英", KeyCode.MODE_SWITCH, 0.66f),
             KeyDefinition("123", KeyCode.NUMBER_LAYOUT, 0.66f),
-            KeyDefinition("空格 🎤", KeyCode.SPACE, 2.16f),
+            KeyDefinition(spaceBarLabel("空格"), KeyCode.SPACE, 2.16f),
             KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 0.66f),
             KeyDefinition("↵", KeyCode.ENTER, 0.66f)
         )
@@ -775,7 +776,7 @@ class KeyboardView @JvmOverloads constructor(
         listOf(
             KeyDefinition("En/中", KeyCode.MODE_SWITCH, 0.66f),
             KeyDefinition("123", KeyCode.NUMBER_LAYOUT, 0.66f),
-            KeyDefinition("Space 🎤", KeyCode.SPACE, 2.16f),
+            KeyDefinition(spaceBarLabel("Space"), KeyCode.SPACE, 2.16f),
             KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 0.66f),
             KeyDefinition("↵", KeyCode.ENTER, 0.66f)
         )
@@ -997,7 +998,7 @@ class KeyboardView @JvmOverloads constructor(
     private fun bottomRowCn(): List<KeyDefinition> = listOf(
         KeyDefinition("中/英", KeyCode.MODE_SWITCH, 1.2f),
         KeyDefinition("，", KeyCode.COMMA, 1f),
-        KeyDefinition("空格 🎤", KeyCode.SPACE, 6.5f),
+        KeyDefinition(spaceBarLabel("空格"), KeyCode.SPACE, 6.5f),
         KeyDefinition("。", KeyCode.PERIOD, 1f),
         KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 1f),
         KeyDefinition("↵", KeyCode.ENTER, 1.3f)
@@ -1006,7 +1007,7 @@ class KeyboardView @JvmOverloads constructor(
     private fun bottomRowEn(): List<KeyDefinition> = listOf(
         KeyDefinition("中/英", KeyCode.MODE_SWITCH, 1.2f),
         KeyDefinition(",", KeyCode.COMMA, 1f),
-        KeyDefinition("Space 🎤", KeyCode.SPACE, 6.5f),
+        KeyDefinition(spaceBarLabel("Space"), KeyCode.SPACE, 6.5f),
         KeyDefinition(".", KeyCode.PERIOD, 1f),
         KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 1f),
         KeyDefinition("↵", KeyCode.ENTER, 1.3f)
@@ -1019,6 +1020,9 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     private fun dp(value: Float): Float = value * resources.displayMetrics.density
+
+    private fun spaceBarLabel(base: String): String =
+        if (BuildConfig.VOICE_INPUT_ENABLED) "$base 🎤" else base
 
     private fun sp(value: Float): Float = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_SP,

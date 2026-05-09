@@ -7,6 +7,10 @@ android {
     namespace = "com.moqi.im"
     compileSdk = 34
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.moqi.im"
         minSdk = 24
@@ -16,6 +20,20 @@ android {
 
         ndk {
             abiFilters += "arm64-v8a"
+        }
+    }
+
+    flavorDimensions += "bundle"
+    productFlavors {
+        create("full") {
+            dimension = "bundle"
+            buildConfigField("boolean", "VOICE_INPUT_ENABLED", "true")
+        }
+        create("lite") {
+            dimension = "bundle"
+            applicationIdSuffix = ".lite"
+            versionNameSuffix = "-lite"
+            buildConfigField("boolean", "VOICE_INPUT_ENABLED", "false")
         }
     }
 
@@ -50,7 +68,7 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation(files("libs/sherpa-onnx-1.13.0.aar"))
+    add("fullImplementation", files("libs/sherpa-onnx-1.13.0.aar"))
     implementation(files("libs/moqi-ime.aar"))
     testImplementation("junit:junit:4.13.2")
 }

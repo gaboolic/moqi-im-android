@@ -15,7 +15,8 @@ class InputTestActivity : AppCompatActivity() {
         editText.requestFocus()
         editText.post {
             val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
-            imm?.showSoftInput(editText, InputMethodManager.SHOW_FORCED)
+            // SHOW_FORCED 已废弃，部分机型（尤其 ColorOS 等）上可能引发异常；IMPLICIT 即可弹出键盘
+            imm?.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT)
         }
     }
 }

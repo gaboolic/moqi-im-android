@@ -23,6 +23,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.Toast
+import com.moqi.im.BuildConfig
 import com.moqi.im.engine.CandidateEntry
 import com.moqi.im.engine.CandidateEntrySource
 import com.moqi.im.engine.InputMode
@@ -200,6 +201,7 @@ class MoqiInputMethodService : InputMethodService() {
             }
         }
         keyboardView?.setOnSpaceLongPressListener { pressed ->
+            if (!BuildConfig.VOICE_INPUT_ENABLED) return@setOnSpaceLongPressListener
             if (pressed) {
                 startSpaceVoiceHold()
             } else {
@@ -240,6 +242,7 @@ class MoqiInputMethodService : InputMethodService() {
             }
             override fun onInputMethodPicker() = showInputMethodPicker()
             override fun onVoiceInput() {
+                if (!BuildConfig.VOICE_INPUT_ENABLED) return
                 hideMenuPanel()
                 enterVoiceMode()
             }
@@ -318,7 +321,9 @@ class MoqiInputMethodService : InputMethodService() {
             KeyCode.SHIFT -> handleShift()
             KeyCode.MODE_SWITCH -> cycleInputMode()
             KeyCode.VOICE -> {
-                if (currentMode == InputMode.VOICE && isListening) {
+                if (!BuildConfig.VOICE_INPUT_ENABLED) {
+                    // ignore
+                } else if (currentMode == InputMode.VOICE && isListening) {
                     stopVoiceListening()
                     composeView?.setComposingText("")
                 } else if (currentMode == InputMode.VOICE) {
@@ -663,12 +668,14 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun enterVoiceMode() {
+        if (!BuildConfig.VOICE_INPUT_ENABLED) return
         modeBeforeVoice = if (currentMode == InputMode.VOICE) modeBeforeVoice else currentMode
         switchMode(InputMode.VOICE)
         startVoiceListening()
     }
 
     private fun startSpaceVoiceHold() {
+        if (!BuildConfig.VOICE_INPUT_ENABLED) return
         if (isListening) return
         performKeyVibration()
         modeBeforeVoice = if (currentMode == InputMode.VOICE) modeBeforeVoice else currentMode
@@ -691,6 +698,7 @@ class MoqiInputMethodService : InputMethodService() {
 
     @SuppressLint("NewApi")
     private fun startVoiceListening() {
+        if (!BuildConfig.VOICE_INPUT_ENABLED) return
         val voiceHoldRequest = isSpaceVoiceHoldActive
         if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestRecordAudioPermission(voiceHoldRequest)

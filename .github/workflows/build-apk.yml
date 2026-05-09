@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Build debug APK (full + lite)
     runs-on: ubuntu-latest
 
     steps:
@@ -26,19 +26,26 @@ jobs:
       - name: Install Android platform
         run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Download speech models
+      - name: Download speech models (full variant only)
         working-directory: docs
         run: bash download-models.sh
 
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
+      - name: Build debug APKs
+        run: ./gradlew assembleFullDebug assembleLiteDebug
 
-      - name: Upload APK artifact
+      - name: Upload full APK
         uses: actions/upload-artifact@v4
         with:
-          name: moqi-im-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: moqi-im-android-full-debug
+          path: app/build/outputs/apk/full/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload lite APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: moqi-im-android-lite-debug
+          path: app/build/outputs/apk/lite/debug/*.apk
           if-no-files-found: error

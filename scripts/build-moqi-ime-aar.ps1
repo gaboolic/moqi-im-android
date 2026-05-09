@@ -123,11 +123,14 @@ New-Item -ItemType Directory -Force $outputDir | Out-Null
 Write-Host "Building moqi-ime Android AAR..."
 Push-Location $MoqiImeRoot
 try {
+    # 与 go build release 一致：去掉符号表/调试信息并裁剪构建路径，减小 libgojni.so
     $gomobileArgs = @(
         "bind",
         "-target=$Target",
         "-androidapi",
         "$AndroidApi",
+        "-ldflags=-s -w",
+        "-trimpath",
         "-o",
         "$OutputAar",
         "github.com/gaboolic/moqi-ime/mobilebridge"

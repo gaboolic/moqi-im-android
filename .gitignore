@@ -13,6 +13,7 @@ local.properties
 /app/build
 /app/release
 /app/src/main/assets/models
+/app/src/full/assets/models
 
 # Gradle
 .gradle/

@@ -3,7 +3,10 @@
     在仓库根目录调用 Gradle 编译 app APK。
 
 .PARAMETER Variant
-    debug 对应 assembleDebug；release 对应 assembleRelease。
+    debug 对应 *Debug；release 对应 *Release。
+
+.PARAMETER Flavor
+    full / lite / both。默认 both，与 CI 一致打出完整包与精简包。
 
 .PARAMETER Clean
     若指定，先执行 clean 再 assemble。
@@ -11,6 +14,8 @@
 param(
     [ValidateSet("debug", "release")]
     [string]$Variant = "debug",
+    [ValidateSet("full", "lite", "both")]
+    [string]$Flavor = "both",
     [switch]$Clean
 )
 
@@ -22,6 +27,13 @@ if (-not (Test-Path -LiteralPath $Gradlew)) {
     throw "找不到 gradlew.bat: $Gradlew"
 }
 
+$suffix = if ($Variant -eq "release") { "Release" } else { "Debug" }
+$tasks = switch ($Flavor) {
+    "full" { @("assembleFull$suffix") }
+    "lite" { @("assembleLite$suffix") }
+    "both" { @("assembleFull$suffix", "assembleLite$suffix") }
+}
+
 Push-Location $RepoRoot
 try {
     if ($Clean) {
@@ -29,16 +41,23 @@ try {
         & $Gradlew clean --no-daemon
         if ($LASTEXITCODE -ne 0) { throw "gradlew clean 失败，退出码: $LASTEXITCODE" }
     }
-    $task = if ($Variant -eq "release") { "assembleRelease" } else { "assembleDebug" }
-    Write-Host "执行: gradlew.bat $task" -ForegroundColor Cyan
-    & $Gradlew $task --no-daemon
-    if ($LASTEXITCODE -ne 0) { throw "gradlew $task 失败，退出码: $LASTEXITCODE" }
+    foreach ($task in $tasks) {
+        Write-Host "执行: gradlew.bat $task" -ForegroundColor Cyan
+        & $Gradlew $task --no-daemon
+        if ($LASTEXITCODE -ne 0) { throw "gradlew $task 失败，退出码: $LASTEXITCODE" }
+    }
 }
 finally {
     Pop-Location
 }
 
-$apkDir = if ($Variant -eq "release") { "release" } else { "debug" }
-$apkName = if ($Variant -eq "release") { "app-release.apk" } else { "app-debug.apk" }
-$apkPath = Join-Path $RepoRoot "app\build\outputs\apk\$apkDir\$apkName"
-Write-Host "构建完成: $apkPath" -ForegroundColor Green
+$apkKind = if ($Variant -eq "release") { "release" } else { "debug" }
+Write-Host "构建完成。APK 目录: $(Join-Path $RepoRoot "app\build\outputs\apk")" -ForegroundColor Green
+foreach ($f in @("full", "lite")) {
+    if ($Flavor -eq "both" -or $Flavor -eq $f) {
+        $dir = Join-Path $RepoRoot "app\build\outputs\apk\$f\$apkKind"
+        if (Test-Path $dir) {
+            Get-ChildItem $dir -Filter "*.apk" | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Green }
+        }
+    }
+}

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与 full 包（com.moqi.im）可同时安装；输入法列表里需与「墨奇」区分 -->
+    <string name="ime_label">墨奇（精简）</string>
+</resources>
