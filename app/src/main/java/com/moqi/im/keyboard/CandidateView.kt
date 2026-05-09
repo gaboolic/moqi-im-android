@@ -114,6 +114,13 @@ class CandidateView @JvmOverloads constructor(
         if (candidates.isEmpty()) {
             expanded = false
             onExpandedChanged?.invoke(false)
+        } else if (expanded) {
+            expandedCandidates += currentPageCandidates.mapIndexed { index, entry ->
+                ExpandedCandidate(entry, 0, index)
+            }
+            this.candidates = expandedCandidates.map { it.entry }
+            onExpandedChanged?.invoke(true)
+            onExpandedLoadNextPage?.invoke()
         }
         requestLayout()
         invalidate()
