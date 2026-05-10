@@ -753,7 +753,7 @@ class KeyboardView @JvmOverloads constructor(
 
     companion object {
         private const val KEY_REPEAT_INITIAL_DELAY_MS = 350L
-        private const val KEY_REPEAT_INTERVAL_MS = 70L
+        private const val KEY_REPEAT_INTERVAL_MS = 40L
         private const val SPACE_LONG_PRESS_DELAY_MS = 280L
         private const val SWIPE_INPUT_THRESHOLD_DP = 36f
         private const val MAIN_LETTER_TEXT_SIZE_SP = 21f

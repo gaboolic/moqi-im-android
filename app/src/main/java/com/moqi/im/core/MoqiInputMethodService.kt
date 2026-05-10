@@ -104,6 +104,7 @@ class MoqiInputMethodService : InputMethodService() {
     private var lastChineseMode: InputMode = InputMode.PINYIN
     private lateinit var engineRunner: MoqiImeEngineRunner
     private var composingText: StringBuilder = StringBuilder()
+    private var hasActiveImeCandidates: Boolean = false
     private var currentSchemaId: String = ""
 
     private var keyboardView: KeyboardView? = null
@@ -642,6 +643,10 @@ class MoqiInputMethodService : InputMethodService() {
             currentInputConnection.deleteSurroundingText(1, 0)
             return
         }
+        if (!shouldRouteBackspaceToEngine()) {
+            currentInputConnection.deleteSurroundingText(1, 0)
+            return
+        }
         if (isT9Mode && currentMode == InputMode.PINYIN && t9PinyinDigits.isNotEmpty()) {
             t9PinyinDigits.deleteAt(t9PinyinDigits.lastIndex)
             updateT9PinyinOptions()
@@ -649,6 +654,12 @@ class MoqiInputMethodService : InputMethodService() {
         submitMoqiKey(MoqiImeKeyMapper.VK_BACK, fallbackOnFailure = true) {
             sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
         }
+    }
+
+    private fun shouldRouteBackspaceToEngine(): Boolean {
+        return composingText.isNotBlank() ||
+            hasActiveImeCandidates ||
+            (isT9Mode && currentMode == InputMode.PINYIN && t9PinyinDigits.isNotEmpty())
     }
 
     private fun handleEnter() {
@@ -1032,6 +1043,7 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun updateCandidateEntries(entries: List<CandidateEntry>) {
+        hasActiveImeCandidates = entries.any { it.source == CandidateEntrySource.RIME }
         candidateView?.setCandidateEntries(withClipboardCandidate(entries))
     }
 
