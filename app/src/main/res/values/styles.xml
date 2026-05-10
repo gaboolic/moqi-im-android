@@ -1,11 +1,14 @@
 <resources>
     <style name="Theme.MoqiIM" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">#1A1A2E</item>
-        <item name="colorPrimaryVariant">#16213E</item>
+        <item name="colorPrimary">#44403C</item>
+        <item name="colorPrimaryVariant">#44403C</item>
         <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSecondary">#0F3460</item>
+        <item name="colorSecondary">#44403C</item>
+        <item name="colorAccent">#44403C</item>
+        <item name="android:colorAccent">#44403C</item>
+        <item name="colorControlActivated">#44403C</item>
         <item name="colorSurface">#FFFFFF</item>
-        <item name="colorOnSurface">#1A1A2E</item>
+        <item name="colorOnSurface">#44403C</item>
     </style>
 
     <style name="MoqiKeyboard" parent="android:Theme.DeviceDefault">
@@ -14,13 +17,13 @@
 
     <style name="MoquiKeyStyle">
         <item name="android:background">@drawable/key_bg</item>
-        <item name="android:textColor">#1A1A2E</item>
+        <item name="android:textColor">#44403C</item>
         <item name="android:textSize">18sp</item>
         <item name="android:gravity">center</item>
     </style>
 
     <style name="MoqiCandidateStyle">
-        <item name="android:textColor">#1A1A2E</item>
+        <item name="android:textColor">#44403C</item>
         <item name="android:textSize">16sp</item>
     </style>
 </resources>

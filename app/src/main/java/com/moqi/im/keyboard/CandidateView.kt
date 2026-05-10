@@ -17,6 +17,7 @@ import android.widget.OverScroller
 import com.moqi.im.R
 import com.moqi.im.engine.CandidateEntry
 import com.moqi.im.engine.CandidateEntrySource
+import com.moqi.im.theme.ThemePalette
 import kotlin.math.abs
 
 class CandidateView @JvmOverloads constructor(
@@ -94,7 +95,7 @@ class CandidateView @JvmOverloads constructor(
                 android.content.res.Configuration.UI_MODE_NIGHT_YES
 
     init {
-        setBackgroundColor(if (isDarkMode) DARK_BG else LIGHT_BG)
+        setBackgroundColor(if (isDarkMode) DARK_BG else ThemePalette.current(context).candidateBackgroundColor)
     }
 
     fun setCandidates(candidates: List<String>) {
@@ -205,11 +206,13 @@ class CandidateView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        textPaint.color = if (isDarkMode) 0xFFF3F5F7.toInt() else 0xFF20242A.toInt()
-        commentPaint.color = if (isDarkMode) 0xFF9CA3AA.toInt() else 0xFF69727D.toInt()
+        val theme = ThemePalette.current(context)
+        setBackgroundColor(if (isDarkMode) DARK_BG else theme.candidateBackgroundColor)
+        textPaint.color = if (isDarkMode) 0xFFF3F5F7.toInt() else theme.textColor
+        commentPaint.color = if (isDarkMode) 0xFF9CA3AA.toInt() else theme.textColor
         dividerPaint.color = if (isDarkMode) 0xFF3A4148.toInt() else 0xFFD7DCE2.toInt()
         highlightPaint.color = if (isDarkMode) 0xFF303942.toInt() else 0xFFE5E9EF.toInt()
-        arrowPaint.color = if (isDarkMode) 0xFFB8C0C8.toInt() else 0xFF69727D.toInt()
+        arrowPaint.color = if (isDarkMode) 0xFFB8C0C8.toInt() else theme.textColor
 
         canvas.save()
         canvas.clipRect(menuButtonRect.right, 0f, moreButtonRect.left, height.toFloat())
@@ -281,7 +284,7 @@ class CandidateView @JvmOverloads constructor(
         }
 
         if (candidates.isEmpty()) {
-            commentPaint.color = if (isDarkMode) 0xFF858C94.toInt() else 0xFF8A929C.toInt()
+            commentPaint.color = if (isDarkMode) 0xFF858C94.toInt() else theme.textColor
             commentPaint.textAlign = Paint.Align.CENTER
             val baseline = height / 2f - (commentPaint.descent() + commentPaint.ascent()) / 2f
             val centerX = (emojiButtonRect.right + moreButtonRect.left) / 2f
@@ -660,7 +663,7 @@ class CandidateView @JvmOverloads constructor(
         val labels = listOf("", "⌃", "⌄")
         val baselineOffset = -(commentPaint.descent() + commentPaint.ascent()) / 2f
         commentPaint.textAlign = Paint.Align.CENTER
-        commentPaint.color = if (isDarkMode) 0xFFB8C0C8.toInt() else 0xFF69727D.toInt()
+        commentPaint.color = if (isDarkMode) 0xFFB8C0C8.toInt() else ThemePalette.current(context).textColor
         for ((index, rect) in controlRects.withIndex()) {
             if (index == pressedControl && moreButtonPressed) {
                 canvas.drawRoundRect(rect, dp(6f), dp(6f), highlightPaint)
@@ -775,7 +778,6 @@ class CandidateView @JvmOverloads constructor(
 
     companion object {
         private const val DARK_BG = 0xFF20262C.toInt()
-        private const val LIGHT_BG = 0xFFF7F8FA.toInt()
         private const val CONTROL_COLLAPSE = 0
         private const val CONTROL_SCROLL_UP = 1
         private const val CONTROL_SCROLL_DOWN = 2

@@ -13,7 +13,7 @@
         android:text="@string/app_name"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:textColor="#1A1A2E"
+        android:textColor="#44403C"
         android:layout_marginTop="32dp" />
 
     <TextView
@@ -21,7 +21,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textSize="18sp"
-        android:textColor="#333333"
+        android:textColor="#44403C"
         android:gravity="center"
         android:layout_marginTop="24dp"
         android:lineSpacingMultiplier="1.3" />
@@ -31,7 +31,7 @@
         android:layout_height="wrap_content"
         android:text="@string/setup_guide"
         android:textSize="15sp"
-        android:textColor="#666666"
+        android:textColor="#44403C"
         android:gravity="center"
         android:layout_marginTop="16dp"
         android:lineSpacingMultiplier="1.3" />
@@ -49,7 +49,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/setup_step_enable_short"
-            android:textColor="#666666"
+            android:textColor="#44403C"
             android:textSize="15sp" />
 
         <Button
@@ -57,7 +57,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/setup_enable"
-            android:backgroundTint="#0F3460"
+            android:backgroundTint="#44403C"
             android:textColor="#FFFFFF" />
     </LinearLayout>
 
@@ -74,7 +74,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/setup_step_select_short"
-            android:textColor="#666666"
+            android:textColor="#44403C"
             android:textSize="15sp" />
 
         <Button
@@ -82,7 +82,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/setup_select"
-            android:backgroundTint="#0F3460"
+            android:backgroundTint="#44403C"
             android:textColor="#FFFFFF" />
     </LinearLayout>
 
@@ -90,7 +90,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/setup_step_start_short"
-        android:textColor="#666666"
+        android:textColor="#44403C"
         android:textSize="15sp"
         android:gravity="center"
         android:layout_marginTop="8dp" />
@@ -101,7 +101,7 @@
         android:layout_height="wrap_content"
         android:text="@string/setup_input_test"
         android:layout_marginTop="8dp"
-        android:backgroundTint="#0F3460"
+        android:backgroundTint="#44403C"
         android:textColor="#FFFFFF" />
 
 </LinearLayout>

@@ -10,4 +10,30 @@
         <item>wubi</item>
         <item>english</item>
     </string-array>
+    <string-array name="keyboard_theme_entries">
+        <item>@string/theme_default</item>
+        <item>@string/theme_wallgray</item>
+        <item>@string/theme_orange</item>
+        <item>@string/theme_redplum</item>
+        <item>@string/theme_shacheng</item>
+        <item>@string/theme_globe</item>
+        <item>@string/theme_soymilk</item>
+        <item>@string/theme_chrysanthemum</item>
+        <item>@string/theme_qinhuangdao</item>
+        <item>@string/theme_bubblegum</item>
+        <item>@string/theme_pepsi</item>
+    </string-array>
+    <string-array name="keyboard_theme_values">
+        <item>default</item>
+        <item>wallgray</item>
+        <item>orange</item>
+        <item>redplum</item>
+        <item>shacheng</item>
+        <item>globe</item>
+        <item>soymilk</item>
+        <item>chrysanthemum</item>
+        <item>qinhuangdao</item>
+        <item>bubblegum</item>
+        <item>pepsi</item>
+    </string-array>
 </resources>

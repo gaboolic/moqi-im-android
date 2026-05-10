@@ -32,6 +32,13 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="键盘">
+        <ListPreference
+            android:key="keyboard_theme"
+            android:title="@string/pref_keyboard_theme"
+            android:entries="@array/keyboard_theme_entries"
+            android:entryValues="@array/keyboard_theme_values"
+            android:defaultValue="default"
+            app:useSimpleSummaryProvider="true" />
         <SeekBarPreference
             android:key="keyboard_height"
             android:title="@string/pref_keyboard_height"

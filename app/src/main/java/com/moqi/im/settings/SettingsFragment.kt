@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.preference.ListPreference
@@ -18,6 +19,7 @@ import com.moqi.im.data.RimeSafSync
 import com.moqi.im.engine.MoqiImeSession
 import com.moqi.im.engine.RimeSchemaEntry
 import com.moqi.im.moqiAndroidDataDir
+import com.moqi.im.theme.ThemePalette
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -25,7 +27,7 @@ import mobilebridge.Mobilebridge
 
 class SettingsFragment : PreferenceFragmentCompat() {
     companion object {
-        private const val PREFS_NAME = "moqi_im_prefs"
+        private const val PREFS_NAME = ThemePalette.PREFS_NAME
         private const val PREF_RIME_SHARED_DIR_URI = "rime_shared_dir_uri"
         private const val DEFAULT_KEYBOARD_HEIGHT_PERCENT = 100
         private const val RIME_DEPLOY_COMMAND_ID = 10
@@ -74,6 +76,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
         setupRimeSharedDirectoryPreferences()
 
+        findPreference<ListPreference>(ThemePalette.PREF_KEY)?.setOnPreferenceChangeListener { _, _ ->
+            mainHandler.post { applyThemeBackground() }
+            true
+        }
+
         val keyboardHeightPref = findPreference<SeekBarPreference>("keyboard_height")
         keyboardHeightPref?.let { pref ->
             updateKeyboardHeightSummary(pref, pref.value)
@@ -113,6 +120,23 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
 
         loadRimePreferences(showProgress = true)
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        applyThemeBackground()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyThemeBackground()
+    }
+
+    private fun applyThemeBackground() {
+        val color = ThemePalette.backgroundColor(requireContext())
+        view?.setBackgroundColor(color)
+        listView.setBackgroundColor(color)
+        activity?.findViewById<View>(R.id.settings_root)?.setBackgroundColor(color)
     }
 
     private fun setupRimeSharedDirectoryPreferences() {

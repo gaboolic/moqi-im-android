@@ -17,6 +17,7 @@ import android.widget.OverScroller
 import androidx.core.content.ContextCompat
 import com.moqi.im.BuildConfig
 import com.moqi.im.R
+import com.moqi.im.theme.ThemePalette
 import kotlin.math.min
 
 class KeyboardView @JvmOverloads constructor(
@@ -220,7 +221,7 @@ class KeyboardView @JvmOverloads constructor(
             val maxScroll = maxT9SidePanelScroll().coerceAtLeast(1f)
             val thumbHeight = ((trackBottom - trackTop) * t9SidePanelRect.height() / (items.size * itemHeight)).coerceAtLeast(dp(18f))
             val thumbTop = trackTop + (trackBottom - trackTop - thumbHeight) * t9SidePanelScrollOffset / maxScroll
-            iconPaint.color = if (dark) 0xFF4A5158.toInt() else 0xFFD0D5DC.toInt()
+            iconPaint.color = if (dark) 0xFF4A5158.toInt() else ThemePalette.current(context).textColor
             iconPaint.style = Paint.Style.FILL
             iconPaint.strokeWidth = 0f
             canvas.drawRoundRect(
@@ -234,7 +235,9 @@ class KeyboardView @JvmOverloads constructor(
 
     private fun updatePaintColors() {
         val dark = isDarkMode
-        labelPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
+        val theme = ThemePalette.current(context)
+        val lightTextColor = theme.textColor
+        labelPaint.color = if (dark) 0xFFE0E0E8.toInt() else lightTextColor
         labelPaint.textSize = when {
             isT9Layout() -> keyTextSize(MAIN_LETTER_TEXT_SIZE_SP, 0.42f)
             currentLayout == Layout.NUMBER -> keyTextSize(30f, 0.58f)
@@ -246,7 +249,7 @@ class KeyboardView @JvmOverloads constructor(
         labelPaint.textAlign = Paint.Align.CENTER
         labelPaint.style = Paint.Style.FILL
         labelPaint.strokeWidth = 0f
-        subLabelPaint.color = if (dark) 0xFF9090AA.toInt() else 0xFF606080.toInt()
+        subLabelPaint.color = if (dark) 0xFF9090AA.toInt() else lightTextColor
         subLabelPaint.textSize = if (isNumberOrSymbolLayout() || currentLayout == Layout.EMOJI) {
             keyTextSize(13f, 0.26f)
         } else {
@@ -255,17 +258,17 @@ class KeyboardView @JvmOverloads constructor(
         subLabelPaint.textAlign = Paint.Align.CENTER
         subLabelPaint.style = Paint.Style.FILL
         subLabelPaint.strokeWidth = 0f
-        specialKeyPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
+        specialKeyPaint.color = if (dark) 0xFFE0E0E8.toInt() else lightTextColor
         specialKeyPaint.textSize = keyTextSize(16f, 0.42f)
         specialKeyPaint.textAlign = Paint.Align.CENTER
         specialKeyPaint.style = Paint.Style.FILL
         specialKeyPaint.strokeWidth = 0f
-        sidePanelTextPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
+        sidePanelTextPaint.color = if (dark) 0xFFE0E0E8.toInt() else lightTextColor
         sidePanelTextPaint.textSize = keyTextSize(T9_SIDE_PANEL_TEXT_SIZE_SP, 0.36f)
         sidePanelTextPaint.textAlign = Paint.Align.CENTER
         sidePanelTextPaint.style = Paint.Style.FILL
         sidePanelTextPaint.strokeWidth = 0f
-        iconPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
+        iconPaint.color = if (dark) 0xFFE0E0E8.toInt() else lightTextColor
         iconPaint.style = Paint.Style.FILL
         iconPaint.strokeWidth = 0f
         popupPaint.color = if (dark) 0xFF3A3A54.toInt() else 0xFFFFFFFF.toInt()
@@ -274,17 +277,17 @@ class KeyboardView @JvmOverloads constructor(
         popupSelectedPaint.color = if (dark) 0xFF5A5A78.toInt() else 0xFFE3E6EF.toInt()
         popupSelectedPaint.style = Paint.Style.FILL
         popupSelectedPaint.strokeWidth = 0f
-        popupTextPaint.color = if (dark) 0xFFECECF4.toInt() else 0xFF1A1A2E.toInt()
+        popupTextPaint.color = if (dark) 0xFFECECF4.toInt() else lightTextColor
         popupTextPaint.textSize = keyTextSize(T9_LETTER_POPUP_TEXT_SIZE_SP, 0.42f)
         popupTextPaint.textAlign = Paint.Align.CENTER
         popupTextPaint.style = Paint.Style.FILL
         popupTextPaint.strokeWidth = 0f
-        shiftIconPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
+        shiftIconPaint.color = if (dark) 0xFFE0E0E8.toInt() else lightTextColor
         shiftIconPaint.style = Paint.Style.FILL
         shiftIconPaint.strokeWidth = 0f
         keyPaint.style = Paint.Style.FILL
         keyPaint.strokeWidth = 0f
-        val bgColor = if (dark) 0xFF1A1A2E.toInt() else 0xFFF0F0F5.toInt()
+        val bgColor = if (dark) 0xFF1A1A2E.toInt() else theme.backgroundColor
         setBackgroundColor(bgColor)
     }
 
@@ -338,7 +341,7 @@ class KeyboardView @JvmOverloads constructor(
 
         val subLabel = key.subLabel
         if (subLabel != null && !isSpecialKey(key)) {
-            subLabelPaint.color = if (dark) 0xFF9090AA.toInt() else 0xFF606080.toInt()
+            subLabelPaint.color = if (dark) 0xFF9090AA.toInt() else ThemePalette.current(context).textColor
             val subBottomInsetDp = if (usesLetterDigitDualLineSpacing()) QWERTY_DUAL_LINE_SUB_BOTTOM_INSET_DP else 7f
             val subBaseline = rect.bottom - dp(subBottomInsetDp)
             canvas.drawText(subLabel, rect.centerX(), subBaseline, subLabelPaint)
@@ -364,18 +367,18 @@ class KeyboardView @JvmOverloads constructor(
         val activePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textAlign = Paint.Align.LEFT
             textSize = keyTextSize(MODE_SWITCH_ACTIVE_TEXT_SP, 0.40f)
-            color = if (dark) 0xFFECECF4.toInt() else 0xFF0D0D12.toInt()
+            color = if (dark) 0xFFECECF4.toInt() else ThemePalette.current(context).textColor
             isFakeBoldText = false
         }
         val inactivePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textAlign = Paint.Align.LEFT
             textSize = keyTextSize(MODE_SWITCH_INACTIVE_TEXT_SP, 0.28f)
-            color = if (dark) 0xFF6E6E82.toInt() else 0xFF9EA0B0.toInt()
+            color = if (dark) 0xFF6E6E82.toInt() else ThemePalette.current(context).textColor
         }
         val slashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textAlign = Paint.Align.LEFT
             textSize = keyTextSize(MODE_SWITCH_SLASH_TEXT_SP, 0.24f)
-            color = if (dark) 0xFF5C5C70.toInt() else 0xFFC8CAD6.toInt()
+            color = if (dark) 0xFF5C5C70.toInt() else ThemePalette.current(context).textColor
         }
         val left = if (chineseActive) "中" else "英"
         val right = if (chineseActive) "英" else "中"
@@ -418,10 +421,10 @@ class KeyboardView @JvmOverloads constructor(
         if (active) {
             shiftIconPaint.style = Paint.Style.FILL
             shiftIconPaint.strokeWidth = 0f
-            shiftIconPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
+            shiftIconPaint.color = if (dark) 0xFFE0E0E8.toInt() else ThemePalette.current(context).textColor
             canvas.drawPath(path, shiftIconPaint)
         } else {
-            shiftIconPaint.color = if (dark) SHIFT_ICON_COLOR_DARK else SHIFT_ICON_COLOR_LIGHT
+            shiftIconPaint.color = if (dark) SHIFT_ICON_COLOR_DARK else ThemePalette.current(context).textColor
             shiftIconPaint.style = Paint.Style.STROKE
             shiftIconPaint.strokeWidth = dp(SHIFT_ARROW_STROKE_DP)
             shiftIconPaint.strokeJoin = Paint.Join.ROUND
@@ -430,7 +433,7 @@ class KeyboardView @JvmOverloads constructor(
         if (locked) {
             shiftIconPaint.style = Paint.Style.STROKE
             shiftIconPaint.strokeWidth = dp(SHIFT_LOCK_UNDERLINE_STROKE_DP)
-            shiftIconPaint.color = if (dark) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt()
+            shiftIconPaint.color = if (dark) 0xFFE0E0E8.toInt() else ThemePalette.current(context).textColor
             val underlineY = rect.bottom - dp(13f)
             canvas.drawLine(cx - unit * 1.35f, underlineY, cx + unit * 1.35f, underlineY, shiftIconPaint)
         }
@@ -447,7 +450,7 @@ class KeyboardView @JvmOverloads constructor(
 
     private fun drawEnterKey(canvas: Canvas, rect: RectF) {
         val d = ensureEnterKeyIcon() ?: return
-        d.setTint(if (isDarkMode) 0xFFE0E0E8.toInt() else 0xFF1A1A2E.toInt())
+        d.setTint(if (isDarkMode) 0xFFE0E0E8.toInt() else ThemePalette.current(context).textColor)
         val side = rect.height().coerceAtMost(rect.width())
         val iconPx = (side * ENTER_ICON_SCALE).coerceIn(dp(ENTER_ICON_MIN_DP), dp(ENTER_ICON_MAX_DP))
         val left = (rect.centerX() - iconPx / 2f).toInt()
@@ -889,8 +892,6 @@ class KeyboardView @JvmOverloads constructor(
         /** Shift 轮廓略细于早期 2.2dp，减轻「粗黑」感。 */
         private const val SHIFT_ARROW_STROKE_DP = 1.55f
         private const val SHIFT_LOCK_UNDERLINE_STROKE_DP = 1.35f
-        /** 未按下 Shift 时的箭头描边色（按下后为实心，用功能键前景色）。 */
-        private val SHIFT_ICON_COLOR_LIGHT = (0xFF4A4A62).toInt()
         private val SHIFT_ICON_COLOR_DARK = (0xFFD8D8E4).toInt()
         /** 回车 PNG（[ic_key_enter]）相对键帽短边缩放。 */
         private const val ENTER_ICON_SCALE = 0.52f

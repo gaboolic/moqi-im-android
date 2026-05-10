@@ -1,7 +1,7 @@
 package com.moqi.im.keyboard
 
 import android.content.Context
-import android.graphics.Color
+import android.content.res.ColorStateList
 import android.text.TextUtils
 import android.text.InputType
 import android.util.AttributeSet
@@ -16,6 +16,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.moqi.im.engine.RimeMenuEntry
 import com.moqi.im.engine.RimeSchemaEntry
+import com.moqi.im.theme.ThemePalette
 
 class KeyboardMenuView @JvmOverloads constructor(
     context: Context,
@@ -72,7 +73,7 @@ class KeyboardMenuView @JvmOverloads constructor(
     }
 
     init {
-        setBackgroundColor(Color.rgb(240, 240, 245))
+        applyThemeBackground()
         mainLayout.addView(createHeader(), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)))
         scrollView.addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
         mainLayout.addView(scrollView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -81,6 +82,7 @@ class KeyboardMenuView @JvmOverloads constructor(
     }
 
     fun render(state: MenuState) {
+        applyThemeBackground()
         dismissSelectionList()
         content.removeAllViews()
 
@@ -149,7 +151,7 @@ class KeyboardMenuView @JvmOverloads constructor(
             addView(TextView(context).apply {
                 text = "墨奇菜单"
                 textSize = 17f
-                setTextColor(Color.rgb(26, 26, 46))
+                setTextColor(themeTextColor())
                 gravity = Gravity.CENTER_VERTICAL
             }, LinearLayout.LayoutParams(0, dp(40), 1f))
             addView(menuButton("设置") { callback?.onOpenSettings() }, LinearLayout.LayoutParams(dp(68), dp(40)))
@@ -160,7 +162,7 @@ class KeyboardMenuView @JvmOverloads constructor(
         content.addView(TextView(context).apply {
             text = title
             textSize = 14f
-            setTextColor(Color.rgb(96, 96, 128))
+            setTextColor(themeTextColor())
             setPadding(0, dp(8), 0, dp(3))
         })
     }
@@ -213,7 +215,7 @@ class KeyboardMenuView @JvmOverloads constructor(
     private fun createSelectionList(items: List<SelectionItem>): View {
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(246, 246, 250))
+            setBackgroundColor(themeBackgroundColor())
             items.forEach { item ->
                 addView(selectionRow(item), LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(52)))
             }
@@ -241,7 +243,7 @@ class KeyboardMenuView @JvmOverloads constructor(
         return TextView(context).apply {
             text = if (item.selected) "✓ ${item.label}" else item.label
             textSize = 16f
-            setTextColor(Color.rgb(26, 26, 46))
+            setTextColor(themeTextColor())
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(18), 0, dp(18), 0)
             maxLines = 1
@@ -259,7 +261,7 @@ class KeyboardMenuView @JvmOverloads constructor(
         content.addView(TextView(context).apply {
             text = "方案集名称会自动从 URL 文件名提取"
             textSize = 13f
-            setTextColor(Color.rgb(96, 96, 128))
+            setTextColor(themeTextColor())
             setPadding(0, dp(4), 0, dp(6))
         })
         content.addView(menuButton("下载并切换") {
@@ -288,6 +290,8 @@ class KeyboardMenuView @JvmOverloads constructor(
             setPadding(dp(4), 0, dp(4), 0)
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
+            backgroundTintList = ColorStateList.valueOf(ThemePalette.current(context).buttonColor)
+            setTextColor(themeTextColor())
             setOnClickListener(onClick)
         }
     }
@@ -309,4 +313,16 @@ class KeyboardMenuView @JvmOverloads constructor(
         val selected: Boolean,
         val onClick: View.OnClickListener
     )
+
+    private fun applyThemeBackground() {
+        val backgroundColor = themeBackgroundColor()
+        setBackgroundColor(backgroundColor)
+        mainLayout.setBackgroundColor(backgroundColor)
+        scrollView.setBackgroundColor(backgroundColor)
+        content.setBackgroundColor(backgroundColor)
+    }
+
+    private fun themeBackgroundColor(): Int = ThemePalette.current(context).backgroundColor
+
+    private fun themeTextColor(): Int = ThemePalette.current(context).textColor
 }
