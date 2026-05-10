@@ -50,6 +50,10 @@
             android:key="keyboard_height_reset"
             android:title="@string/pref_keyboard_height_reset"
             android:summary="@string/pref_keyboard_height_reset_summary" />
+        <Preference
+            android:key="keyboard_bottom_row_layout"
+            android:title="@string/pref_keyboard_bottom_row_layout"
+            android:summary="@string/pref_keyboard_bottom_row_layout_summary" />
         <SwitchPreferenceCompat
             android:key="key_sound"
             android:title="@string/pref_sound"

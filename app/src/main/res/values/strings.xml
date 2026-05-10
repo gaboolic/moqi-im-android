@@ -40,6 +40,11 @@
     <string name="pref_keyboard_height_reset">重置键盘高度</string>
     <string name="pref_keyboard_height_reset_summary">恢复为当前默认高度</string>
     <string name="pref_keyboard_height_reset_done">已恢复默认键盘高度</string>
+    <string name="pref_keyboard_bottom_row_layout">最后一行布局</string>
+    <string name="pref_keyboard_bottom_row_layout_summary">拖动调整 26 键、123 和符号键盘的最后一行</string>
+    <string name="pref_keyboard_bottom_row_layout_hint">长按按键后拖动到目标位置，只调整每个键盘的最后一行。</string>
+    <string name="pref_keyboard_bottom_row_layout_saved">已保存最后一行布局</string>
+    <string name="pref_keyboard_bottom_row_layout_reset">已恢复默认最后一行布局</string>
     <string name="pref_keyboard_theme">主题</string>
     <string name="theme_default">默认主题</string>
     <string name="theme_wallgray">墙灰</string>

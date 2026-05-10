@@ -1101,13 +1101,7 @@ class KeyboardView @JvmOverloads constructor(
             KeyDefinition("9", '9'.code, 1f),
             KeyDefinition("@", '@'.code, 0.72f)
         ),
-        listOf(
-            KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 0.72f),
-            KeyDefinition("返回", KeyCode.RETURN_TO_TEXT, 0.72f),
-            KeyDefinition("0", '0'.code, 1.5f),
-            KeyDefinition("空格", KeyCode.SPACE, 0.72f),
-            KeyDefinition("↵", KeyCode.ENTER, 0.72f)
-        )
+        KeyboardBottomRowLayout.numberRow(context)
     )
 
     private fun symbolRows(): List<List<KeyDefinition>> {
@@ -1142,13 +1136,7 @@ class KeyboardView @JvmOverloads constructor(
             symbolCategoryRow("英文", KeyCode.SYMBOL_ENGLISH, SymbolPage.ENGLISH, symbols[1]),
             symbolCategoryRow("中文", KeyCode.SYMBOL_CHINESE, SymbolPage.CHINESE, symbols[2]),
             symbolCategoryRow("网络", KeyCode.SYMBOL_WEB, SymbolPage.WEB, symbols[3]),
-            listOf(
-                KeyDefinition("返回", KeyCode.RETURN_TO_TEXT, 1f),
-                KeyDefinition("123", KeyCode.NUMBER_LAYOUT, 1f),
-                KeyDefinition("⌃", KeyCode.SYMBOL_PREV, 1f),
-                KeyDefinition("⌄", KeyCode.SYMBOL_NEXT, 1f),
-                KeyDefinition("⌫", KeyCode.DELETE, 1f, isRepeatable = true)
-            )
+            KeyboardBottomRowLayout.symbolRow(context)
         )
     }
 
@@ -1268,25 +1256,9 @@ class KeyboardView @JvmOverloads constructor(
         KeyDefinition("⌫", KeyCode.DELETE, 1.5f, isRepeatable = true)
     )
 
-    private fun bottomRowCn(): List<KeyDefinition> = listOf(
-        KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 1f),
-        KeyDefinition("123", KeyCode.NUMBER_LAYOUT, 1f),
-        KeyDefinition("，", KeyCode.COMMA, 1f),
-        KeyDefinition(spaceBarLabel("空格"), KeyCode.SPACE, 5.1f),
-        KeyDefinition("。", KeyCode.PERIOD, 1f),
-        KeyDefinition("中/英", KeyCode.MODE_SWITCH, 1.75f),
-        KeyDefinition("↵", KeyCode.ENTER, 1.3f)
-    )
+    private fun bottomRowCn(): List<KeyDefinition> = KeyboardBottomRowLayout.qwertyRow(context, chinese = true)
 
-    private fun bottomRowEn(): List<KeyDefinition> = listOf(
-        KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 1f),
-        KeyDefinition("123", KeyCode.NUMBER_LAYOUT, 1f),
-        KeyDefinition(",", KeyCode.COMMA, 1f),
-        KeyDefinition(spaceBarLabel("Space"), KeyCode.SPACE, 5.1f),
-        KeyDefinition(".", KeyCode.PERIOD, 1f),
-        KeyDefinition("中/英", KeyCode.MODE_SWITCH, 1.75f),
-        KeyDefinition("↵", KeyCode.ENTER, 1.3f)
-    )
+    private fun bottomRowEn(): List<KeyDefinition> = KeyboardBottomRowLayout.qwertyRow(context, chinese = false)
 
     private fun charToKeyCode(ch: Char): Int = when (ch) {
         in 'a'..'z' -> KeyEvent.KEYCODE_A + (ch - 'a')

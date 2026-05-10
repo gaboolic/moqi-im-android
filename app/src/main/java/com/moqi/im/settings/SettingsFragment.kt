@@ -1,14 +1,25 @@
 package com.moqi.im.settings
 
 import android.app.ProgressDialog
+import android.content.ClipData
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.DragEvent
+import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
@@ -18,6 +29,7 @@ import com.moqi.im.R
 import com.moqi.im.data.RimeSafSync
 import com.moqi.im.engine.MoqiImeSession
 import com.moqi.im.engine.RimeSchemaEntry
+import com.moqi.im.keyboard.KeyboardBottomRowLayout
 import com.moqi.im.moqiAndroidDataDir
 import com.moqi.im.theme.ThemePalette
 import java.io.File
@@ -99,6 +111,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
             true
         }
 
+        setupBottomRowLayoutPreference()
+
         val soundPref = findPreference<SwitchPreferenceCompat>("key_sound")
         soundPref?.setOnPreferenceChangeListener { _, newValue ->
             val prefs = requireActivity().getSharedPreferences(PREFS_NAME, 0)
@@ -138,6 +152,173 @@ class SettingsFragment : PreferenceFragmentCompat() {
         listView.setBackgroundColor(color)
         activity?.findViewById<View>(R.id.settings_root)?.setBackgroundColor(color)
     }
+
+    private data class RowEditorState(
+        val row: KeyboardBottomRowLayout.Row,
+        val order: MutableList<String>
+    )
+
+    private fun setupBottomRowLayoutPreference() {
+        val pref = findPreference<Preference>("keyboard_bottom_row_layout") ?: return
+        pref.setOnPreferenceClickListener {
+            showBottomRowLayoutDialog()
+            true
+        }
+    }
+
+    private fun showBottomRowLayoutDialog() {
+        val context = requireContext()
+        val states = KeyboardBottomRowLayout.Row.values().map { row ->
+            RowEditorState(row, KeyboardBottomRowLayout.order(context, row).toMutableList())
+        }
+        val content = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(12), dp(20), dp(8))
+        }
+        content.addView(TextView(context).apply {
+            text = getString(R.string.pref_keyboard_bottom_row_layout_hint)
+            setTextColor(Color.DKGRAY)
+            textSize = 14f
+            setPadding(0, 0, 0, dp(12))
+        })
+
+        lateinit var renderAll: () -> Unit
+        val rowViews = states.associateWith { state ->
+            LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                renderBottomRowEditor(this, state) { renderAll() }
+            }
+        }
+        renderAll = {
+            rowViews.forEach { (state, rowView) ->
+                renderBottomRowEditor(rowView, state) { renderAll() }
+            }
+        }
+
+        states.forEach { state ->
+            content.addView(TextView(context).apply {
+                text = state.row.title
+                textSize = 15f
+                setTextColor(Color.BLACK)
+                setPadding(0, dp(10), 0, dp(6))
+            })
+            content.addView(HorizontalScrollView(context).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(rowViews.getValue(state))
+            })
+        }
+
+        val dialog = AlertDialog.Builder(context)
+            .setTitle(R.string.pref_keyboard_bottom_row_layout)
+            .setView(ScrollView(context).apply { addView(content) })
+            .setNegativeButton(android.R.string.cancel, null)
+            .setNeutralButton("重置", null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                states.forEach { state ->
+                    KeyboardBottomRowLayout.save(context, state.row, state.order)
+                }
+                Toast.makeText(context, R.string.pref_keyboard_bottom_row_layout_saved, Toast.LENGTH_SHORT).show()
+            }
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                KeyboardBottomRowLayout.resetAll(context)
+                states.forEach { state ->
+                    state.order.clear()
+                    state.order.addAll(state.row.defaultOrder)
+                }
+                renderAll()
+                Toast.makeText(context, R.string.pref_keyboard_bottom_row_layout_reset, Toast.LENGTH_SHORT).show()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun renderBottomRowEditor(
+        rowView: LinearLayout,
+        state: RowEditorState,
+        onOrderChanged: () -> Unit
+    ) {
+        rowView.removeAllViews()
+        state.order.forEach { keyId ->
+            rowView.addView(createDraggableKeyView(keyId, state, onOrderChanged))
+        }
+    }
+
+    private fun createDraggableKeyView(
+        keyId: String,
+        state: RowEditorState,
+        onOrderChanged: () -> Unit
+    ): TextView {
+        val context = requireContext()
+        return TextView(context).apply {
+            text = KeyboardBottomRowLayout.displayLabel(keyId)
+            textSize = 16f
+            gravity = Gravity.CENTER
+            minWidth = dp(48)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(10).toFloat()
+                setColor(0xFFECEFF7.toInt())
+                setStroke(dp(1), 0xFFC4CAD8.toInt())
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, dp(8), dp(8))
+            }
+            setOnLongClickListener {
+                startDragAndDrop(
+                    ClipData.newPlainText("keyboard_bottom_row_key", keyId),
+                    View.DragShadowBuilder(this),
+                    keyId,
+                    View.DRAG_FLAG_OPAQUE
+                )
+                true
+            }
+            setOnDragListener { _, event ->
+                when (event.action) {
+                    DragEvent.ACTION_DRAG_STARTED -> event.localState is String
+                    DragEvent.ACTION_DRAG_ENTERED -> {
+                        alpha = 0.65f
+                        true
+                    }
+                    DragEvent.ACTION_DRAG_EXITED -> {
+                        alpha = 1f
+                        true
+                    }
+                    DragEvent.ACTION_DROP -> {
+                        alpha = 1f
+                        val draggedKeyId = event.localState as? String ?: return@setOnDragListener false
+                        moveKeyBefore(state.order, draggedKeyId, keyId)
+                        onOrderChanged()
+                        true
+                    }
+                    DragEvent.ACTION_DRAG_ENDED -> {
+                        alpha = 1f
+                        true
+                    }
+                    else -> true
+                }
+            }
+        }
+    }
+
+    private fun moveKeyBefore(order: MutableList<String>, draggedKeyId: String, targetKeyId: String) {
+        if (draggedKeyId == targetKeyId) return
+        val fromIndex = order.indexOf(draggedKeyId)
+        val targetIndex = order.indexOf(targetKeyId)
+        if (fromIndex == -1 || targetIndex == -1) return
+        order.removeAt(fromIndex)
+        val insertIndex = order.indexOf(targetKeyId).takeIf { it >= 0 } ?: targetIndex
+        order.add(insertIndex, draggedKeyId)
+    }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 
     private fun setupRimeSharedDirectoryPreferences() {
         findPreference<Preference>("rime_shared_dir")?.setOnPreferenceClickListener {
