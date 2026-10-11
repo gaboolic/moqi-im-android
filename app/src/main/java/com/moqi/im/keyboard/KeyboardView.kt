@@ -56,6 +56,7 @@ class KeyboardView @JvmOverloads constructor(
     private var rows: List<List<KeyDefinition>> = emptyList()
     private var keyRects: List<List<RectF>> = emptyList()
     private var pressedKey: Pair<Int, Int>? = null
+    private val pointerRollover = PointerRollover()
     private var repeatingKey: Pair<Int, Int>? = null
     private var repeatRunnable: Runnable? = null
     private var touchStartKey: Pair<Int, Int>? = null
@@ -504,6 +505,54 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && pointerRollover.activeId != null) {
+            pointerRollover.cancel { dispatchCanceledGesture(event) }
+        }
+        val id = event.getPointerId(event.actionIndex)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val previousId = pointerRollover.activeId
+                val exclusive = spaceLongPressTriggered || t9LetterLongPressTriggered || t9PinyinScrollTriggered
+                pointerRollover.down(id, exclusive,
+                    { dispatchPointerEvent(event, previousId, MotionEvent.ACTION_UP) },
+                    { dispatchPointerEvent(event, id, MotionEvent.ACTION_DOWN) })
+            }
+            MotionEvent.ACTION_MOVE ->
+                dispatchPointerEvent(event, pointerRollover.activeId, MotionEvent.ACTION_MOVE)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP ->
+                pointerRollover.up(id) { dispatchPointerEvent(event, id, MotionEvent.ACTION_UP) }
+            MotionEvent.ACTION_CANCEL -> pointerRollover.cancel {
+                handleSinglePointerEvent(event)
+            }
+            else -> return super.onTouchEvent(event)
+        }
+        return true
+    }
+
+    private fun dispatchCanceledGesture(event: MotionEvent) {
+        val cancel = MotionEvent.obtain(event)
+        cancel.action = MotionEvent.ACTION_CANCEL
+        try {
+            handleSinglePointerEvent(cancel)
+        } finally {
+            cancel.recycle()
+        }
+    }
+
+    /** 复用原有单指手势；不能使用 event.x，它始终属于数组中的第一根手指。 */
+    private fun dispatchPointerEvent(event: MotionEvent, id: Int?, action: Int) {
+        val index = id?.let { event.findPointerIndex(it) } ?: return
+        if (index < 0) return
+        val single = MotionEvent.obtain(event.downTime, event.eventTime, action,
+            event.getX(index), event.getY(index), event.metaState)
+        try {
+            handleSinglePointerEvent(single)
+        } finally {
+            single.recycle()
+        }
+    }
+
+    private fun handleSinglePointerEvent(event: MotionEvent): Boolean {
         val sidePanelStarted = touchStartKey?.let { isT9SidePanelCell(it.first, it.second) } == true
         if (sidePanelStarted) {
             ensureSidePanelVelocityTracker().addMovement(event)
