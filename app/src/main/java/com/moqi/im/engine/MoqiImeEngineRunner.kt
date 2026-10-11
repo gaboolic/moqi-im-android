@@ -23,6 +23,7 @@ class MoqiImeEngineRunner(
     private val executor: ExecutorService = Executors.newSingleThreadExecutor(EngineThreadFactory())
     private val requestSequence = AtomicLong(0L)
     private val generation = AtomicLong(0L)
+    private val compositionCallbacks = CompositionCallbacks()
 
     private var session: MoqiImeSession? = null
     private var currentGuid: String = initialGuid
@@ -67,6 +68,8 @@ class MoqiImeEngineRunner(
     }
 
     fun resetComposition(callback: ((EngineResult) -> Unit)? = null) {
+        // 清空是输入边界：旧请求不得在清空后回写候选或提交到新输入框。
+        compositionCallbacks.invalidate()
         submit("resetComposition", callback ?: {}) {
             session?.reset() ?: notReadyResult()
         }
@@ -82,6 +85,19 @@ class MoqiImeEngineRunner(
     fun keyDown(keyCode: Int, charCode: Int = 0, callback: (EngineResult) -> Unit) {
         submit("keyDown key=$keyCode char=$charCode", callback) {
             session?.keyDown(keyCode, charCode) ?: notReadyResult()
+        }
+    }
+
+    fun keyDownWithPinyinFallback(keyCode: Int, charCode: Int, callback: (EngineResult, String) -> Unit) {
+        var changedSchema = ""
+        submit("keyDownWithPinyinFallback key=$keyCode", { callback(it, changedSchema) }) {
+            val activeSession = session ?: return@submit notReadyResult()
+            val outcome = PinyinKeyTransaction.run(charCode,
+                key = { activeSession.keyDown(keyCode, charCode) },
+                currentSchema = { activeSession.currentSchemaId() },
+                selectSchema = { activeSession.selectSchema(it) })
+            changedSchema = outcome.changedSchema
+            outcome.result
         }
     }
 
@@ -211,12 +227,13 @@ class MoqiImeEngineRunner(
     ) {
         val requestId = requestSequence.incrementAndGet()
         val targetGeneration = generation.get()
+        val deliver = compositionCallbacks.capture(callback)
         executor.execute {
             val start = System.nanoTime()
             val result = action()
             logDuration(label, start, "request=$requestId success=${result.success} handled=${result.handled}")
             postIfCurrent(targetGeneration) {
-                callback(EngineResult(requestId, result))
+                deliver(EngineResult(requestId, result))
             }
         }
     }
