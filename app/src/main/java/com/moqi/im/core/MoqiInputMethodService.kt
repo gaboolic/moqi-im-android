@@ -188,8 +188,7 @@ class MoqiInputMethodService : InputMethodService() {
             getSystemService(VIBRATOR_SERVICE) as Vibrator
         }
     }
-    private var t9TapCount: Int = 0
-    private var t9CurrentKey: Int = 0
+    private val t9MultiTap = T9MultiTap()
     private var t9PinyinDigits: StringBuilder = StringBuilder()
     private var t9ActiveSegmentIndex: Int = 0
     private val t9SelectedPinyinBySegment = mutableMapOf<Int, String>()
@@ -410,6 +409,7 @@ class MoqiInputMethodService : InputMethodService() {
     override fun onFinishInput() {
         candidateView?.dismissActionMenu()
         inputSessionActive = false
+        resetT9State()
         super.onFinishInput()
     }
 
@@ -604,24 +604,9 @@ class MoqiInputMethodService : InputMethodService() {
 
         t9Runnable?.let { handler.removeCallbacks(it) }
 
-        if (t9CurrentKey == keyCode && t9TapCount < chars.length - 1) {
-            t9TapCount++
-        } else {
-            if (t9CurrentKey != 0 && t9TapCount > 0) {
-                val prevChars = t9KeyMap[t9CurrentKey]
-                if (prevChars != null && t9TapCount < prevChars.length) {
-                    commitText(prevChars[t9TapCount].toString())
-                }
-            }
-            t9TapCount = 0
-            t9CurrentKey = keyCode
-        }
-
+        t9MultiTap.press(keyCode, chars)?.let { commitText(it) }
         t9Runnable = Runnable {
-            val currentChars = t9KeyMap[t9CurrentKey]
-            if (currentChars != null && t9TapCount < currentChars.length) {
-                commitText(currentChars[t9TapCount].toString())
-            }
+            t9MultiTap.take()?.let { commitText(it) }
             resetT9State()
         }
         handler.postDelayed(t9Runnable!!, T9_TIMEOUT)
@@ -787,8 +772,8 @@ class MoqiInputMethodService : InputMethodService() {
 
     private fun resetT9State() {
         t9ReplayGeneration++
-        t9TapCount = 0
-        t9CurrentKey = 0
+        t9Runnable?.let { handler.removeCallbacks(it) }
+        t9MultiTap.clear()
         t9PinyinDigits.clear()
         t9SelectedPinyinBySegment.clear()
         t9InferredPinyinBySegment.clear()
