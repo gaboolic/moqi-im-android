@@ -26,6 +26,8 @@ class MoqiImeEngineRunner(
     private val compositionGeneration = AtomicLong(0L)
 
     private var session: MoqiImeSession? = null
+    // Accessed only on the engine executor, including requests whose UI callback is still queued.
+    private var latestResult: MoqiImeResult? = null
     private var currentGuid: String = initialGuid
     // Accessed only by executor; UI page counters describe cached pages, not engine state.
     private val candidatePager = CandidatePager(
@@ -54,6 +56,7 @@ class MoqiImeEngineRunner(
             if (session != null && currentGuid == guid) {
                 val result = session?.reset()
                 if (result?.success == true) candidatePager.reset()
+                latestResult = result
                 val schemaId = session?.currentSchemaId().orEmpty()
                 ImeDebugLog.d(TAG) { "reuse session for reset guid=$guid success=${result?.success}" }
                 postIfCurrent(targetGeneration) {
@@ -65,6 +68,7 @@ class MoqiImeEngineRunner(
             val newSession = MoqiImeSession(guid = guid, androidDataDir = androidDataDir)
             oldSession?.close()
             session = newSession
+            latestResult = null
             currentGuid = guid
             candidatePager.reset()
             val schemaId = newSession.currentSchemaId()
@@ -95,6 +99,13 @@ class MoqiImeEngineRunner(
     fun keyDown(keyCode: Int, charCode: Int = 0, callback: (EngineResult) -> Unit) {
         submit("keyDown key=$keyCode char=$charCode", callback) {
             session?.keyDown(keyCode, charCode) ?: notReadyResult()
+        }
+    }
+
+    fun commitComposition(callback: (EngineResult) -> Unit) {
+        submit("commitComposition", callback) {
+            val activeSession = session ?: return@submit notReadyResult()
+            CompositionCommitter.commit(latestResult) { activeSession.selectCandidate(0) }
         }
     }
 
@@ -149,6 +160,7 @@ class MoqiImeEngineRunner(
             val activeSession = session
             val result = activeSession?.selectSchemeSet(name) ?: notReadyResult()
             if (result.success) candidatePager.reset()
+            latestResult = null
             val schemaId = if (result.success && activeSession != null) {
                 waitForSchemeSetReady(activeSession, name)
             } else {
@@ -195,6 +207,7 @@ class MoqiImeEngineRunner(
             val activeSession = session
             val result = activeSession?.selectSchema(schemaId) ?: notReadyResult()
             if (result.success) candidatePager.reset()
+            latestResult = result
             val currentSchemaId = activeSession?.currentSchemaId().orEmpty()
             logDuration("selectSchema", start, "request=$requestId schemaId=$schemaId success=${result.success}")
             postIfCurrent(targetGeneration) {
@@ -235,6 +248,7 @@ class MoqiImeEngineRunner(
         executor.execute {
             val start = System.nanoTime()
             val result = if (paging) action() else candidatePager.onBasePage(action)
+            latestResult = result
             logDuration(label, start, "request=$requestId success=${result.success} handled=${result.handled}")
             postIfCurrent(targetGeneration) {
                 if (compositionGeneration.get() == targetCompositionGeneration) {
