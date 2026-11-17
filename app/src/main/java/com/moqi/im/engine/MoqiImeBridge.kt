@@ -357,6 +357,10 @@ object MoqiImeKeyMapper {
     }
 
     fun digit(ch: Char): Pair<Int, Int> = ch.code to ch.code
+
+    // The bridge translates Windows virtual keys before CharCode. ASCII punctuation such as
+    // '!', '.', '/' would otherwise become PageUp, Delete, Help, etc. Zero has no VK mapping.
+    fun symbol(ch: Char): Pair<Int, Int> = 0 to ch.code
 }
 
 private fun MobileResponse?.toResult(): MoqiImeResult {
