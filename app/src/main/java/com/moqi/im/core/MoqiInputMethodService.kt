@@ -867,6 +867,10 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun handleSpace() {
+        if (keyboardView?.isDirectCommitLayout() == true) {
+            commitText(" ")
+            return
+        }
         submitMoqiKey(MoqiImeKeyMapper.VK_SPACE, ' '.code, fallbackOnFailure = true) {
             sendKeyChar(' ')
         }
@@ -1071,7 +1075,7 @@ class MoqiInputMethodService : InputMethodService() {
             return false
         }
 
-        if (result.commit.isNotBlank()) {
+        if (result.commit.isNotEmpty()) {
             consumeClipboardSuggestion()
             currentInputConnection.commitText(result.commit, 1)
             t9PinyinDigits.clear()
@@ -1474,11 +1478,8 @@ class MoqiInputMethodService : InputMethodService() {
             params.height = targetHeight
             view.layoutParams = params
         }
-        if (keyboardMenuView?.visibility != View.VISIBLE) {
-            if (!expanded) {
-                updateKeyboard()
-            }
-        }
+        // Expanding candidates only hides the keyboard; collapsing must restore the
+        // existing layout rather than replacing NUMBER/SYMBOL/EMOJI with text keys.
         if (expanded) {
             view.bringToFront()
         }

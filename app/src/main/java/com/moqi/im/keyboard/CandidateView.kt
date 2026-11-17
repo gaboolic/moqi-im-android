@@ -142,7 +142,7 @@ class CandidateView @JvmOverloads constructor(
         emojiButtonPressed = false
         pageChangeRequested = false
         scrollOffset = 0f
-        if (candidates.isEmpty()) {
+        if (candidates.isEmpty() && expanded) {
             expanded = false
             onExpandedChanged?.invoke(false)
         } else if (expanded) {

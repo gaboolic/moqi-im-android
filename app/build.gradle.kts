@@ -67,6 +67,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     kotlinOptions {
         jvmTarget = "17"
     }
@@ -83,6 +87,7 @@ dependencies {
     add("fullImplementation", files("libs/sherpa-onnx-1.13.0.aar"))
     implementation(files("libs/moqi-ime.aar"))
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.12.2")
 }
 
 // 应用模型下载脚本（可选：构建时自动下载模型）
