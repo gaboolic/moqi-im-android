@@ -153,7 +153,11 @@ class MoqiInputMethodService : InputMethodService() {
             composeView?.setComposingText(RIME_INIT_MESSAGE)
         }
     }
+    // Last cached UI page; the engine tracks its own page exclusively on its worker thread.
     private var expandedCandidatePageIndex: Int = 0
+    private var isCandidateExpanded: Boolean = false
+    private var expandedCandidateGeneration: Long = 0
+    private var isExpandedCandidateSelecting: Boolean = false
     private var isExpandedCandidateLoading: Boolean = false
     private var expandedCandidateInitialPrefetchRemaining: Int = 0
     private var dismissedClipboardText: String? = null
@@ -319,6 +323,7 @@ class MoqiInputMethodService : InputMethodService() {
         }
 
         candidateView?.setOnCandidateIndexSelectedListener { index ->
+            if (isExpandedCandidateSelecting) return@setOnCandidateIndexSelectedListener
             val candidateView = candidateView ?: return@setOnCandidateIndexSelectedListener
             val entry = candidateView.getCandidateEntry(index)
             if (entry?.source == CandidateEntrySource.CLIPBOARD) {
@@ -1284,6 +1289,7 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun updateCandidateEntries(entries: List<CandidateEntry>) {
+        isExpandedCandidateSelecting = false
         hasActiveImeCandidates = entries.any { it.source == CandidateEntrySource.RIME }
         candidateView?.setCandidateEntries(withClipboardCandidate(entries))
     }
@@ -1454,9 +1460,12 @@ class MoqiInputMethodService : InputMethodService() {
 
     private fun setCandidateExpanded(expanded: Boolean) {
         val view = candidateView ?: return
+        // Invalidate in-flight callbacks on collapse, reopen, or a new candidate result.
+        expandedCandidateGeneration += 1
+        isCandidateExpanded = expanded
+        isExpandedCandidateLoading = false
         if (expanded) {
             expandedCandidatePageIndex = 0
-            isExpandedCandidateLoading = false
             expandedCandidateInitialPrefetchRemaining = INITIAL_EXPANDED_PREFETCH_PAGES
         } else {
             expandedCandidateInitialPrefetchRemaining = 0
@@ -1494,20 +1503,25 @@ class MoqiInputMethodService : InputMethodService() {
             showRimeInitializingIfNeeded()
             return
         }
-        if (isExpandedCandidateLoading) return
+        if (!isCandidateExpanded || isExpandedCandidateSelecting || isExpandedCandidateLoading) return
         isExpandedCandidateLoading = true
+        val generation = expandedCandidateGeneration
+        val targetPageIndex = expandedCandidatePageIndex + 1
         val isInitialPrefetch = expandedCandidateInitialPrefetchRemaining > 0
-        engineRunner.changeCandidatePage(backward = false) { engineResult ->
+        engineRunner.loadCandidatePage(targetPageIndex) { engineResult ->
+            if (generation != expandedCandidateGeneration || !isCandidateExpanded || isExpandedCandidateSelecting) {
+                return@loadCandidatePage
+            }
             val result = engineResult.result
             if (!result.success) {
                 isExpandedCandidateLoading = false
                 expandedCandidateInitialPrefetchRemaining = 0
                 applyMoqiResult(result)
-                return@changeCandidatePage
+                return@loadCandidatePage
             }
             isExpandedCandidateLoading = false
             if (result.handled && result.showCandidates && result.candidateEntries.isNotEmpty()) {
-                expandedCandidatePageIndex += 1
+                expandedCandidatePageIndex = targetPageIndex
                 if (isInitialPrefetch) {
                     expandedCandidateInitialPrefetchRemaining =
                         (expandedCandidateInitialPrefetchRemaining - 1).coerceAtLeast(0)
@@ -1517,7 +1531,9 @@ class MoqiInputMethodService : InputMethodService() {
                     entries = candidateEntriesForDisplay(result.candidateEntries)
                 )
                 if (expandedCandidateInitialPrefetchRemaining > 0) {
-                    handler.post { loadNextExpandedCandidatePage() }
+                    handler.post {
+                        if (generation == expandedCandidateGeneration) loadNextExpandedCandidatePage()
+                    }
                 }
             } else {
                 expandedCandidateInitialPrefetchRemaining = 0
@@ -1530,6 +1546,7 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun selectExpandedCandidate(pageIndex: Int, pageLocalIndex: Int) {
+        if (isExpandedCandidateSelecting) return
         if (pageIndex == 0) {
             val view = candidateView
             val entry = view?.getCurrentPageCandidateEntry(pageLocalIndex)
@@ -1548,37 +1565,14 @@ class MoqiInputMethodService : InputMethodService() {
             pageLocalIndex
         }
         if (targetLocalIndex < 0) return
-        moveToExpandedCandidatePage(pageIndex) {
-            engineRunner.selectCandidate(targetLocalIndex) { engineResult ->
-                applyMoqiResult(engineResult.result)
-            }
-        }
-    }
-
-    private fun moveToExpandedCandidatePage(targetPageIndex: Int, onReady: () -> Unit) {
-        val delta = targetPageIndex - expandedCandidatePageIndex
-        if (delta == 0) {
-            onReady()
-            return
-        }
-        val backward = delta < 0
-        val steps = kotlin.math.abs(delta)
-        moveExpandedCandidatePageStep(backward, steps, onReady)
-    }
-
-    private fun moveExpandedCandidatePageStep(backward: Boolean, remainingSteps: Int, onReady: () -> Unit) {
-        if (remainingSteps <= 0) {
-            onReady()
-            return
-        }
-        engineRunner.changeCandidatePage(backward = backward) { engineResult ->
-            val result = engineResult.result
-            if (!result.success || !result.handled) {
-                applyMoqiResult(result)
-                return@changeCandidatePage
-            }
-            expandedCandidatePageIndex += if (backward) -1 else 1
-            moveExpandedCandidatePageStep(backward, remainingSteps - 1, onReady)
+        // Stop queued prefetch continuations before submitting the atomic engine operation.
+        expandedCandidateGeneration += 1
+        expandedCandidateInitialPrefetchRemaining = 0
+        isExpandedCandidateLoading = false
+        isExpandedCandidateSelecting = true
+        engineRunner.selectCandidateOnPage(pageIndex, targetLocalIndex) { engineResult ->
+            isExpandedCandidateSelecting = false
+            applyMoqiResult(engineResult.result)
         }
     }
 
