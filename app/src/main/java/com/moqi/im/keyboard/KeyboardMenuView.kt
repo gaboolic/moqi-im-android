@@ -7,6 +7,8 @@ import android.text.InputType
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import com.moqi.im.theme.ThemeSurfaceColors
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
@@ -140,6 +142,27 @@ class KeyboardMenuView @JvmOverloads constructor(
         }
 
         addDownloadSection()
+        // Header buttons/title and URL input survive render; recolor them with the new content.
+        applyTextColors(this)
+    }
+
+    private fun applyTextColors(
+        view: View,
+        colors: ThemeSurfaceColors = ThemeSurfaceColors.from(ThemePalette.current(context)),
+    ) {
+        if (view is Button) {
+            view.backgroundTintList = ColorStateList.valueOf(colors.button)
+            view.setTextColor(colors.onButton)
+        } else if (view is TextView) {
+            view.setTextColor(colors.onSurface)
+            if (view is EditText) {
+                view.setHintTextColor(colors.onSurface)
+                view.backgroundTintList = ColorStateList.valueOf(colors.onSurface)
+            }
+        }
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) applyTextColors(view.getChildAt(index), colors)
+        }
     }
 
     private fun createHeader(): View {
@@ -291,7 +314,7 @@ class KeyboardMenuView @JvmOverloads constructor(
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
             backgroundTintList = ColorStateList.valueOf(ThemePalette.current(context).buttonColor)
-            setTextColor(themeTextColor())
+            setTextColor(ThemeSurfaceColors.from(ThemePalette.current(context)).onButton)
             setOnClickListener(onClick)
         }
     }
@@ -322,7 +345,7 @@ class KeyboardMenuView @JvmOverloads constructor(
         content.setBackgroundColor(backgroundColor)
     }
 
-    private fun themeBackgroundColor(): Int = ThemePalette.current(context).backgroundColor
+    private fun themeBackgroundColor(): Int = ThemeSurfaceColors.from(ThemePalette.current(context)).surface
 
-    private fun themeTextColor(): Int = ThemePalette.current(context).textColor
+    private fun themeTextColor(): Int = ThemeSurfaceColors.from(ThemePalette.current(context)).onSurface
 }
