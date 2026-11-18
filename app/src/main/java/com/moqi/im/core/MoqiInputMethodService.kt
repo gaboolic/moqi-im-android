@@ -145,6 +145,7 @@ class MoqiInputMethodService : InputMethodService() {
     private var shiftActive: Boolean = false
     private var shiftLocked: Boolean = false
     private var isT9Mode: Boolean = false
+    private val textLayouts = TextKeyboardLayouts()
     private var modeBeforeVoice: InputMode = InputMode.PINYIN
     private var sherpaVoiceEngine: SherpaVoiceEngine? = null
     private var isListening: Boolean = false
@@ -983,10 +984,9 @@ class MoqiInputMethodService : InputMethodService() {
 
     private fun exitVoiceMode() {
         isSpaceVoiceHoldActive = false
-        stopVoiceListening()
-        currentMode = modeBeforeVoice
-        resetTextEngine()
-        updateKeyboard()
+        // Use the same synchronous layout restoration as ordinary language switches.
+        // switchMode owns the single voice stop and engine reset.
+        switchMode(modeBeforeVoice)
     }
 
     private fun switchMode(mode: InputMode) {
@@ -995,6 +995,7 @@ class MoqiInputMethodService : InputMethodService() {
             lastChineseMode = mode
         }
         currentMode = mode
+        isT9Mode = textLayouts.isT9(mode == InputMode.ENGLISH)
         shiftActive = false
         shiftLocked = false
         resetTextEngine()
@@ -1155,9 +1156,9 @@ class MoqiInputMethodService : InputMethodService() {
             }
             return
         }
-        engineRunner.keyDown(keyCode, charCode) { engineResult ->
-            // keyDown may carry a consumed commit. Only the runner's session generation may
-            // invalidate it; a later T9 replay/symbol is not grounds to drop committed text.
+        val receive: (MoqiImeEngineRunner.EngineResult) -> Unit = { engineResult ->
+            // A later T9 replay/symbol must not discard a result carrying consumed commits.
+            // Editor/composition boundaries are gated centrally by the runner.
             val result = engineResult.result
             ImeDebugLog.d(TAG) {
                 "engineResult seq=${engineResult.sequence} mode=$currentMode keyCode=$keyCode charCode=$charCode " +
@@ -1165,45 +1166,19 @@ class MoqiInputMethodService : InputMethodService() {
                     "commit=${result.commit} candidates=${result.candidates.size} error=${result.error}"
             }
             val handled = applyMoqiResult(result)
-            if (!handled && shouldRetryWithFullPinyin(result, charCode, retryFullPinyinOnUnhandled)) {
-                retryKeyWithFullPinyin(keyCode, charCode)
-                return@keyDown
-            }
             val shouldFallback = fallback != null && !handled && result.commit.isEmpty() &&
                 (fallbackOnFailure || result.success)
             if (shouldFallback) {
                 fallback?.invoke()
             }
         }
-    }
-
-    private fun shouldRetryWithFullPinyin(
-        result: MoqiImeResult,
-        charCode: Int,
-        retryFullPinyinOnUnhandled: Boolean
-    ): Boolean {
-        if (!retryFullPinyinOnUnhandled || !result.success || result.handled) return false
-        if (currentMode != InputMode.PINYIN) return false
-        if (result.composition.isNotBlank() || result.commit.isNotBlank()) return false
-        if (charCode !in 'a'.code..'z'.code && charCode !in 'A'.code..'Z'.code) return false
-        return currentSchemaId.contains("double_pinyin", ignoreCase = true)
-    }
-
-    private fun retryKeyWithFullPinyin(keyCode: Int, charCode: Int) {
-        val targetSchema = "rime_frost"
-        ImeDebugLog.d(TAG) {
-            "retry unhandled alphabet key with full pinyin schema current=$currentSchemaId " +
-                "target=$targetSchema charCode=$charCode"
-        }
-        engineRunner.selectSchema(targetSchema) { schemaResult, schemaId ->
-            if (!schemaResult.result.success) {
-                applyMoqiResult(schemaResult.result)
-                return@selectSchema
+        if (retryFullPinyinOnUnhandled && currentMode == InputMode.PINYIN) {
+            engineRunner.keyDownWithPinyinFallback(keyCode, charCode) { result, schema ->
+                if (schema.isNotEmpty()) applySchemaLayout(schema)
+                receive(result)
             }
-            applySchemaLayout(schemaId.ifBlank { targetSchema })
-            engineRunner.keyDown(keyCode, charCode) { retryResult ->
-                applyMoqiResult(retryResult.result)
-            }
+        } else {
+            engineRunner.keyDown(keyCode, charCode, receive)
         }
     }
 
@@ -1215,8 +1190,10 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun applySchemaLayout(schemaId: String) {
+        if (schemaId.isBlank()) return
         currentSchemaId = schemaId
-        isT9Mode = isT9Schema(schemaId)
+        textLayouts.applySchema(schemaId)
+        isT9Mode = textLayouts.isT9(currentMode == InputMode.ENGLISH)
         updateKeyboard()
     }
 
@@ -1225,7 +1202,8 @@ class MoqiInputMethodService : InputMethodService() {
             currentMode = modeBeforeVoice
             resetTextEngine()
         }
-        resetT9State()
+        clearTextEngineState()
+        textLayouts.select(currentMode == InputMode.ENGLISH, t9)
         isT9Mode = t9
         updateKeyboard()
         if (currentMode == InputMode.ENGLISH) {
@@ -1239,12 +1217,7 @@ class MoqiInputMethodService : InputMethodService() {
                 return@selectSchema
             }
             applySchemaLayout(schemaId.ifBlank { targetSchema })
-            resetTextEngine()
         }
-    }
-
-    private fun isT9Schema(schemaId: String): Boolean {
-        return schemaId.contains("_t9", ignoreCase = true) || schemaId.equals("rime_frost_t9", ignoreCase = true)
     }
 
     private fun updateUI() {

@@ -9,23 +9,31 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicLong
 
-class MoqiImeEngineRunner(
+class MoqiImeEngineRunner internal constructor(
     private val androidDataDir: String,
     initialGuid: String,
-    private val onInitialReady: ((String) -> Unit)? = null
+    private val onInitialReady: ((String) -> Unit)?,
+    private val executor: ExecutorService,
+    private val sessionFactory: (String, String) -> EngineSession,
 ) {
+    constructor(
+        androidDataDir: String,
+        initialGuid: String,
+        onInitialReady: ((String) -> Unit)? = null,
+    ) : this(androidDataDir, initialGuid, onInitialReady,
+        Executors.newSingleThreadExecutor(EngineThreadFactory()),
+        { guid, dataDir -> MoqiImeSession(guid, dataDir) })
     data class EngineResult(
         val sequence: Long,
         val result: MoqiImeResult
     )
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val executor: ExecutorService = Executors.newSingleThreadExecutor(EngineThreadFactory())
     private val requestSequence = AtomicLong(0L)
     private val generation = AtomicLong(0L)
-    private val compositionGeneration = AtomicLong(0L)
+    private val compositionCallbacks = CompositionCallbacks()
 
-    private var session: MoqiImeSession? = null
+    private var session: EngineSession? = null
     // Accessed only on the engine executor, including requests whose UI callback is still queued.
     private var latestResult: MoqiImeResult? = null
     private var currentGuid: String = initialGuid
@@ -38,10 +46,7 @@ class MoqiImeEngineRunner(
     init {
         val targetGeneration = generation.get()
         executor.execute {
-            val newSession = MoqiImeSession(
-                guid = initialGuid,
-                androidDataDir = androidDataDir
-            )
+            val newSession = sessionFactory(initialGuid, androidDataDir)
             session = newSession
             val schemaId = newSession.currentSchemaId()
             postIfCurrent(targetGeneration) {
@@ -65,7 +70,7 @@ class MoqiImeEngineRunner(
                 return@execute
             }
             val oldSession = session
-            val newSession = MoqiImeSession(guid = guid, androidDataDir = androidDataDir)
+            val newSession = sessionFactory(guid, androidDataDir)
             oldSession?.close()
             session = newSession
             latestResult = null
@@ -79,9 +84,8 @@ class MoqiImeEngineRunner(
     }
 
     fun resetComposition(callback: ((EngineResult) -> Unit)? = null) {
-        // Keep this separate from session generation so initialization's onReady is preserved.
-        // A cleared composition/new editor must not receive commits from old callbacks.
-        compositionGeneration.incrementAndGet()
+        // Separate from session generation: clearing must not suppress initial readiness.
+        compositionCallbacks.invalidate()
         submit("resetComposition", callback ?: {}, paging = true) {
             val result = session?.reset() ?: notReadyResult()
             if (result.success) candidatePager.reset()
@@ -99,6 +103,19 @@ class MoqiImeEngineRunner(
     fun keyDown(keyCode: Int, charCode: Int = 0, callback: (EngineResult) -> Unit) {
         submit("keyDown key=$keyCode char=$charCode", callback) {
             session?.keyDown(keyCode, charCode) ?: notReadyResult()
+        }
+    }
+
+    fun keyDownWithPinyinFallback(keyCode: Int, charCode: Int, callback: (EngineResult, String) -> Unit) {
+        var changedSchema = ""
+        submit("keyDownWithPinyinFallback key=$keyCode", { callback(it, changedSchema) }) {
+            val activeSession = session ?: return@submit notReadyResult()
+            val outcome = PinyinKeyTransaction.run(charCode,
+                key = { activeSession.keyDown(keyCode, charCode) },
+                currentSchema = { activeSession.currentSchemaId() },
+                selectSchema = { activeSession.selectSchema(it) })
+            changedSchema = outcome.changedSchema
+            outcome.result
         }
     }
 
@@ -173,7 +190,7 @@ class MoqiImeEngineRunner(
         }
     }
 
-    private fun waitForSchemeSetReady(activeSession: MoqiImeSession, name: String): String {
+    private fun waitForSchemeSetReady(activeSession: EngineSession, name: String): String {
         repeat(SCHEME_SET_READY_ATTEMPTS) {
             val currentSchemeSet = activeSession.currentSchemeSet()
             val schemas = activeSession.schemaEntries()
@@ -185,7 +202,7 @@ class MoqiImeEngineRunner(
         return ensureCurrentSchemaForSession(activeSession)
     }
 
-    private fun ensureCurrentSchemaForSession(activeSession: MoqiImeSession): String {
+    private fun ensureCurrentSchemaForSession(activeSession: EngineSession): String {
         val schemas = activeSession.schemaEntries()
         val current = activeSession.currentSchemaId()
         if (schemas.isEmpty()) {
@@ -244,16 +261,14 @@ class MoqiImeEngineRunner(
     ) {
         val requestId = requestSequence.incrementAndGet()
         val targetGeneration = generation.get()
-        val targetCompositionGeneration = compositionGeneration.get()
+        val deliver = compositionCallbacks.capture(callback)
         executor.execute {
             val start = System.nanoTime()
             val result = if (paging) action() else candidatePager.onBasePage(action)
             latestResult = result
             logDuration(label, start, "request=$requestId success=${result.success} handled=${result.handled}")
             postIfCurrent(targetGeneration) {
-                if (compositionGeneration.get() == targetCompositionGeneration) {
-                    callback(EngineResult(requestId, result))
-                }
+                deliver(EngineResult(requestId, result))
             }
         }
     }
