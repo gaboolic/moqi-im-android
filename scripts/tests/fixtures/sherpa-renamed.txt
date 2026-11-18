@@ -1,0 +1,7 @@
+# Reduced from the pre-fix Full Release R8 mapping.
+com.k2fsa.sherpa.onnx.OnlineRecognizerConfig -> com.k2fsa.sherpa.onnx.OnlineRecognizerConfig:
+    com.k2fsa.sherpa.onnx.OnlineModelConfig modelConfig -> b
+    java.lang.String decodingMethod -> g
+com.k2fsa.sherpa.onnx.OnlineRecognizer -> com.k2fsa.sherpa.onnx.OnlineRecognizer:
+    long ptr -> a
+    long newFromAsset(android.content.res.AssetManager,com.k2fsa.sherpa.onnx.OnlineRecognizerConfig) -> newFromAsset
