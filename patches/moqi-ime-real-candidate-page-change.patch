@@ -1,0 +1,154 @@
+diff --git a/input_methods/rime/candidate_page_change_test.go b/input_methods/rime/candidate_page_change_test.go
+new file mode 100644
+index 0000000..4eccea0
+--- /dev/null
++++ b/input_methods/rime/candidate_page_change_test.go
+@@ -0,0 +1,113 @@
++package rime
++
++import (
++	"fmt"
++	"testing"
++
++	"github.com/gaboolic/moqi-ime/imecore"
++)
++
++// librime can consume a paging request (true) without changing the actual menu
++// page, including at a boundary or while moving the highlighted candidate.
++// Keep that behavior independent of both the page delta and the cursor here.
++type pageChangeBackend struct {
++	*testBackend
++	pageDelta    int
++	changeResult bool
++	cursorAfter  int
++	changeCalls  int
++	lastBackward bool
++}
++
++func (b *pageChangeBackend) ChangePage(backward bool) bool {
++	b.changeCalls++
++	b.lastBackward = backward
++	b.pageNo += b.pageDelta
++	b.candidateCursor = b.cursorAfter
++	return b.changeResult
++}
++
++func TestChangePageRequestUsesActualPageNumber(t *testing.T) {
++	for _, tt := range []struct {
++		name         string
++		page         int
++		pageDelta    int
++		cursor       int
++		cursorAfter  int
++		backward     bool
++		changeResult bool
++		wantHandled  int
++	}{
++		{name: "last page handled but unchanged", page: 2, cursor: 1, cursorAfter: 0, changeResult: true},
++		{name: "first page backward handled but unchanged", backward: true, cursor: 1, cursorAfter: 0, changeResult: true},
++		{name: "unchanged page and cursor", page: 1, changeResult: true},
++		{name: "forward page with unchanged cursor", page: 1, pageDelta: 1, changeResult: true, wantHandled: 1},
++		{name: "backward page with unchanged cursor", page: 2, pageDelta: -1, backward: true, changeResult: true, wantHandled: 1},
++		{name: "false and unchanged page", page: 1},
++		{name: "actual page wins over false bool", page: 1, pageDelta: 1, changeResult: false, wantHandled: 1},
++	} {
++		t.Run(tt.name, func(t *testing.T) {
++			t.Setenv("APPDATA", t.TempDir())
++			resetCustomPhraseCacheForTest()
++			ime := newIsolatedTestIME(t)
++			backend := &pageChangeBackend{
++				testBackend: ime.backend.(*testBackend),
++				pageDelta:   tt.pageDelta, changeResult: tt.changeResult, cursorAfter: tt.cursorAfter,
++			}
++			backend.pageNo = tt.page
++			backend.candidateCursor = tt.cursor
++			backend.composition = "ni"
++			backend.candidates = []candidateItem{{Text: "你"}, {Text: "呢"}}
++			ime.backend = backend
++			ime.keyComposing = true
++
++			resp := ime.HandleRequest(&imecore.Request{Method: "changePage", SeqNum: 1, PageBackward: tt.backward})
++
++			if resp.ReturnValue != tt.wantHandled {
++				t.Fatalf("ChangePage bool=%v, actual PageNo %d -> %d, cursor %d -> %d: got handled=%d, want %d", tt.changeResult, tt.page, backend.pageNo, tt.cursor, backend.candidateCursor, resp.ReturnValue, tt.wantHandled)
++			}
++			if backend.changeCalls != 1 || backend.lastBackward != tt.backward {
++				t.Fatalf("expected one backend page request with backward=%v; got calls=%d backward=%v", tt.backward, backend.changeCalls, backend.lastBackward)
++			}
++			if !resp.ShowCandidates || len(resp.CandidateEntries) != 2 || resp.CandidateEntries[0].Text != "你" {
++				t.Fatalf("page result must retain current candidate snapshot even at boundary: %#v", resp)
++			}
++		})
++	}
++}
++
++func TestCloudClipboardChangePageRequestUsesActualPage(t *testing.T) {
++	for _, tt := range []struct {
++		name        string
++		total       int
++		page        int
++		backward    bool
++		wantPage    int
++		wantHandled int
++	}{
++		{name: "empty list"},
++		{name: "single page forward boundary", total: 3},
++		{name: "single page backward boundary", total: 3, backward: true},
++		{name: "forward", total: 12, wantPage: 1, wantHandled: 1},
++		{name: "last page forward boundary", total: 12, page: 1, wantPage: 1},
++		{name: "backward", total: 12, page: 1, backward: true, wantHandled: 1},
++	} {
++		t.Run(tt.name, func(t *testing.T) {
++			ime := newIsolatedTestIME(t)
++			ime.cloudClipboardActive = true
++			ime.cloudClipboardPage = tt.page
++			for i := 0; i < tt.total; i++ {
++				ime.cloudClipboardEntries = append(ime.cloudClipboardEntries, cloudClipboardEntry{
++					Name: fmt.Sprintf("clip-%d", i), Preview: fmt.Sprintf("clip %d", i),
++				})
++			}
++			resp := ime.HandleRequest(&imecore.Request{Method: "changePage", SeqNum: 1, PageBackward: tt.backward})
++			if resp.ReturnValue != tt.wantHandled || ime.cloudClipboardPage != tt.wantPage {
++				t.Fatalf("got handled=%d page=%d, want handled=%d page=%d", resp.ReturnValue, ime.cloudClipboardPage, tt.wantHandled, tt.wantPage)
++			}
++			if tt.total > 0 && (!resp.ShowCandidates || len(resp.CandidateEntries) == 0) {
++				t.Fatalf("expected current cloud clipboard candidates even at boundary: %#v", resp)
++			}
++		})
++	}
++}
+diff --git a/input_methods/rime/rime.go b/input_methods/rime/rime.go
+index 2db4eea..30824bf 100644
+--- a/input_methods/rime/rime.go
++++ b/input_methods/rime/rime.go
+@@ -1837,9 +1837,9 @@ func (ime *IME) applyCandidatePageChange(req *imecore.Request, resp *imecore.Res
+ 		return false
+ 	}
+ 	if ime.cloudClipboardActive {
++		beforePage := ime.cloudClipboardPage
+ 		ime.changeCloudClipboardPage(req.PageBackward, resp)
+-		ime.fillCloudClipboardResponse(resp)
+-		return true
++		return ime.cloudClipboardPage != beforePage
+ 	}
+ 	if _, _, _, ok := ime.currentCustomPhraseOverlay(); ok {
+ 		ime.fillResponseFromCurrentState(resp)
+@@ -1848,11 +1848,14 @@ func (ime *IME) applyCandidatePageChange(req *imecore.Request, resp *imecore.Res
+ 	if ime.backend == nil || !ime.backendReady() {
+ 		return false
+ 	}
+-	if !ime.backend.ChangePage(req.PageBackward) {
+-		return false
+-	}
++	beforePage := ime.backend.State().PageNo
++	// Rime's bool reports whether the request was consumed, not whether the
++	// menu actually changed pages. In particular it can be true at a boundary.
++	// Only real page movement may advance a mobile client's cached page index.
++	ime.backend.ChangePage(req.PageBackward)
++	afterPage := ime.backend.State().PageNo
+ 	ime.fillResponseFromCurrentState(resp)
+-	return true
++	return afterPage != beforePage
+ }
+ 
+ func (ime *IME) resetAIState() {

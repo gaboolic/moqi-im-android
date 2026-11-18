@@ -6,6 +6,9 @@ plugins {
 android {
     namespace = "com.moqi.im"
     compileSdk = 34
+    // Platform instrumentation runner: real native-engine tests without a mock bridge.
+    useLibrary("android.test.runner", false)
+    useLibrary("android.test.base", false)
 
     signingConfigs {
         create("release") {
@@ -26,6 +29,7 @@ android {
         targetSdk = 34
         versionCode = 3
         versionName = "1.0.0"
+        testInstrumentationRunner = "android.test.InstrumentationTestRunner"
 
         ndk {
             abiFilters += "arm64-v8a"
