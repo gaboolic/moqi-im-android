@@ -1,0 +1,9 @@
+# compiler: R8
+# compiler_version: 8.7.18
+com.k2fsa.sherpa.onnx.OnlineRecognizerConfig -> com.k2fsa.sherpa.onnx.OnlineRecognizerConfig:
+# {"id":"sourceFile","fileName":"OnlineRecognizer.kt"}
+    java.lang.String decodingMethod -> decodingMethod
+    com.k2fsa.sherpa.onnx.OnlineModelConfig modelConfig -> modelConfig
+com.k2fsa.sherpa.onnx.OnlineRecognizer -> com.k2fsa.sherpa.onnx.OnlineRecognizer:
+    long ptr -> ptr
+    1:3:long newFromAsset(android.content.res.AssetManager,com.k2fsa.sherpa.onnx.OnlineRecognizerConfig):25:27 -> newFromAsset

@@ -6,6 +6,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.moqi.im.R
 import com.moqi.im.theme.ThemePalette
+import com.moqi.im.theme.ThemeSurfaceColors
 
 class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,9 +30,14 @@ class SettingsActivity : AppCompatActivity() {
         return super.onOptionsItemSelected(item)
     }
 
-    private fun applyThemeColors() {
-        val theme = ThemePalette.current(this)
-        findViewById<android.view.View>(R.id.settings_root)?.setBackgroundColor(theme.backgroundColor)
-        findViewById<TextView>(R.id.settings_title_text)?.setTextColor(theme.textColor)
+    override fun onResume() {
+        super.onResume()
+        applyThemeColors()
+    }
+
+    internal fun applyThemeColors() {
+        val colors = ThemeSurfaceColors.from(ThemePalette.current(this))
+        findViewById<android.view.View>(R.id.settings_root)?.setBackgroundColor(colors.surface)
+        findViewById<TextView>(R.id.settings_title_text)?.setTextColor(colors.onSurface)
     }
 }

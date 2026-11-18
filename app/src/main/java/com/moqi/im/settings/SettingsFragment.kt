@@ -28,6 +28,10 @@ import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SeekBarPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.SwitchPreferenceCompat
+import androidx.preference.PreferenceGroupAdapter
+import androidx.preference.PreferenceViewHolder
+import androidx.recyclerview.widget.RecyclerView
+import com.moqi.im.theme.ThemeSurfaceColors
 import com.moqi.im.R
 import com.moqi.im.cloudclipboard.CloudClipboardPrefs
 import com.moqi.im.cloudclipboard.WebDavUrlPolicy
@@ -162,11 +166,28 @@ class SettingsFragment : PreferenceFragmentCompat() {
         applyThemeBackground()
     }
 
+    override fun onCreateAdapter(preferenceScreen: androidx.preference.PreferenceScreen): RecyclerView.Adapter<*> =
+        object : PreferenceGroupAdapter(preferenceScreen) {
+            override fun onBindViewHolder(holder: PreferenceViewHolder, position: Int) {
+                super.onBindViewHolder(holder, position)
+                // Bind recycled and newly inserted rows too, not only the currently visible children.
+                val colors = ThemeSurfaceColors.from(ThemePalette.current(requireContext()))
+                fun applyText(view: View) {
+                    if (view is TextView) view.setTextColor(colors.onSurface)
+                    if (view is ViewGroup) {
+                        for (index in 0 until view.childCount) applyText(view.getChildAt(index))
+                    }
+                }
+                applyText(holder.itemView)
+            }
+        }
+
     private fun applyThemeBackground() {
-        val color = ThemePalette.backgroundColor(requireContext())
-        view?.setBackgroundColor(color)
-        listView.setBackgroundColor(color)
-        activity?.findViewById<View>(R.id.settings_root)?.setBackgroundColor(color)
+        val colors = ThemeSurfaceColors.from(ThemePalette.current(requireContext()))
+        view?.setBackgroundColor(colors.surface)
+        listView.setBackgroundColor(colors.surface)
+        (activity as? SettingsActivity)?.applyThemeColors()
+        listView.adapter?.notifyDataSetChanged()
     }
 
     private data class RowEditorState(
