@@ -9,32 +9,44 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicLong
 
-class MoqiImeEngineRunner(
+class MoqiImeEngineRunner internal constructor(
     private val androidDataDir: String,
     initialGuid: String,
-    private val onInitialReady: ((String) -> Unit)? = null
+    private val onInitialReady: ((String) -> Unit)?,
+    private val executor: ExecutorService,
+    private val sessionFactory: (String, String) -> EngineSession,
 ) {
+    constructor(
+        androidDataDir: String,
+        initialGuid: String,
+        onInitialReady: ((String) -> Unit)? = null,
+    ) : this(androidDataDir, initialGuid, onInitialReady,
+        Executors.newSingleThreadExecutor(EngineThreadFactory()),
+        { guid, dataDir -> MoqiImeSession(guid, dataDir) })
     data class EngineResult(
         val sequence: Long,
         val result: MoqiImeResult
     )
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val executor: ExecutorService = Executors.newSingleThreadExecutor(EngineThreadFactory())
     private val requestSequence = AtomicLong(0L)
     private val generation = AtomicLong(0L)
     private val compositionCallbacks = CompositionCallbacks()
 
-    private var session: MoqiImeSession? = null
+    private var session: EngineSession? = null
+    // Accessed only on the engine executor, including requests whose UI callback is still queued.
+    private var latestResult: MoqiImeResult? = null
     private var currentGuid: String = initialGuid
+    // Accessed only by executor; UI page counters describe cached pages, not engine state.
+    private val candidatePager = CandidatePager(
+        changePage = { backward -> session?.changePage(backward) ?: notReadyResult() },
+        select = { index -> session?.selectCandidate(index) ?: notReadyResult() },
+    )
 
     init {
         val targetGeneration = generation.get()
         executor.execute {
-            val newSession = MoqiImeSession(
-                guid = initialGuid,
-                androidDataDir = androidDataDir
-            )
+            val newSession = sessionFactory(initialGuid, androidDataDir)
             session = newSession
             val schemaId = newSession.currentSchemaId()
             postIfCurrent(targetGeneration) {
@@ -48,6 +60,8 @@ class MoqiImeEngineRunner(
         executor.execute {
             if (session != null && currentGuid == guid) {
                 val result = session?.reset()
+                if (result?.success == true) candidatePager.reset()
+                latestResult = result
                 val schemaId = session?.currentSchemaId().orEmpty()
                 ImeDebugLog.d(TAG) { "reuse session for reset guid=$guid success=${result?.success}" }
                 postIfCurrent(targetGeneration) {
@@ -56,10 +70,12 @@ class MoqiImeEngineRunner(
                 return@execute
             }
             val oldSession = session
-            val newSession = MoqiImeSession(guid = guid, androidDataDir = androidDataDir)
+            val newSession = sessionFactory(guid, androidDataDir)
             oldSession?.close()
             session = newSession
+            latestResult = null
             currentGuid = guid
+            candidatePager.reset()
             val schemaId = newSession.currentSchemaId()
             postIfCurrent(targetGeneration) {
                 onReady?.invoke(schemaId)
@@ -68,10 +84,12 @@ class MoqiImeEngineRunner(
     }
 
     fun resetComposition(callback: ((EngineResult) -> Unit)? = null) {
-        // 清空是输入边界：旧请求不得在清空后回写候选或提交到新输入框。
+        // Separate from session generation: clearing must not suppress initial readiness.
         compositionCallbacks.invalidate()
-        submit("resetComposition", callback ?: {}) {
-            session?.reset() ?: notReadyResult()
+        submit("resetComposition", callback ?: {}, paging = true) {
+            val result = session?.reset() ?: notReadyResult()
+            if (result.success) candidatePager.reset()
+            result
         }
     }
 
@@ -101,9 +119,20 @@ class MoqiImeEngineRunner(
         }
     }
 
+    fun commitComposition(callback: (EngineResult) -> Unit) {
+        submit("commitComposition", callback) {
+            val activeSession = session ?: return@submit notReadyResult()
+            CompositionCommitter.commit(latestResult) { activeSession.selectCandidate(0) }
+        }
+    }
+
     fun selectCandidate(index: Int, callback: (EngineResult) -> Unit) {
-        submit("selectCandidate index=$index", callback) {
-            session?.selectCandidate(index) ?: notReadyResult()
+        selectCandidateOnPage(0, index, callback)
+    }
+
+    fun selectCandidateOnPage(pageIndex: Int, index: Int, callback: (EngineResult) -> Unit) {
+        submit("selectCandidate page=$pageIndex index=$index", callback, paging = true) {
+            candidatePager.selectCandidate(pageIndex, index)
         }
     }
 
@@ -113,9 +142,9 @@ class MoqiImeEngineRunner(
         }
     }
 
-    fun changeCandidatePage(backward: Boolean, callback: (EngineResult) -> Unit) {
-        submit("changeCandidatePage backward=$backward", callback) {
-            session?.changePage(backward) ?: notReadyResult()
+    fun loadCandidatePage(pageIndex: Int, callback: (EngineResult) -> Unit) {
+        submit("loadCandidatePage page=$pageIndex", callback, paging = true) {
+            candidatePager.loadPage(pageIndex)
         }
     }
 
@@ -147,6 +176,8 @@ class MoqiImeEngineRunner(
             val start = System.nanoTime()
             val activeSession = session
             val result = activeSession?.selectSchemeSet(name) ?: notReadyResult()
+            if (result.success) candidatePager.reset()
+            latestResult = null
             val schemaId = if (result.success && activeSession != null) {
                 waitForSchemeSetReady(activeSession, name)
             } else {
@@ -159,7 +190,7 @@ class MoqiImeEngineRunner(
         }
     }
 
-    private fun waitForSchemeSetReady(activeSession: MoqiImeSession, name: String): String {
+    private fun waitForSchemeSetReady(activeSession: EngineSession, name: String): String {
         repeat(SCHEME_SET_READY_ATTEMPTS) {
             val currentSchemeSet = activeSession.currentSchemeSet()
             val schemas = activeSession.schemaEntries()
@@ -171,7 +202,7 @@ class MoqiImeEngineRunner(
         return ensureCurrentSchemaForSession(activeSession)
     }
 
-    private fun ensureCurrentSchemaForSession(activeSession: MoqiImeSession): String {
+    private fun ensureCurrentSchemaForSession(activeSession: EngineSession): String {
         val schemas = activeSession.schemaEntries()
         val current = activeSession.currentSchemaId()
         if (schemas.isEmpty()) {
@@ -192,6 +223,8 @@ class MoqiImeEngineRunner(
             val start = System.nanoTime()
             val activeSession = session
             val result = activeSession?.selectSchema(schemaId) ?: notReadyResult()
+            if (result.success) candidatePager.reset()
+            latestResult = result
             val currentSchemaId = activeSession?.currentSchemaId().orEmpty()
             logDuration("selectSchema", start, "request=$requestId schemaId=$schemaId success=${result.success}")
             postIfCurrent(targetGeneration) {
@@ -223,6 +256,7 @@ class MoqiImeEngineRunner(
     private fun submit(
         label: String,
         callback: (EngineResult) -> Unit,
+        paging: Boolean = false,
         action: () -> MoqiImeResult
     ) {
         val requestId = requestSequence.incrementAndGet()
@@ -230,7 +264,8 @@ class MoqiImeEngineRunner(
         val deliver = compositionCallbacks.capture(callback)
         executor.execute {
             val start = System.nanoTime()
-            val result = action()
+            val result = if (paging) action() else candidatePager.onBasePage(action)
+            latestResult = result
             logDuration(label, start, "request=$requestId success=${result.success} handled=${result.handled}")
             postIfCurrent(targetGeneration) {
                 deliver(EngineResult(requestId, result))

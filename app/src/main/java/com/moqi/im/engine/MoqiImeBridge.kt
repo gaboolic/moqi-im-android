@@ -49,7 +49,7 @@ data class MoqiImeResult(
 class MoqiImeSession(
     private val guid: String = Mobilebridge.GUIDMoqi,
     private val androidDataDir: String? = null
-) {
+) : EngineSession {
     private var session: Session? = null
     private var initError: String = ""
 
@@ -91,7 +91,7 @@ class MoqiImeSession(
         }
     }
 
-    fun keyDown(keyCode: Int, charCode: Int = 0): MoqiImeResult {
+    override fun keyDown(keyCode: Int, charCode: Int): MoqiImeResult {
         val activeSession = session ?: return initErrorResult()
         return runCatching {
             val start = System.nanoTime()
@@ -104,7 +104,7 @@ class MoqiImeSession(
         }
     }
 
-    fun selectCandidate(index: Int): MoqiImeResult {
+    override fun selectCandidate(index: Int): MoqiImeResult {
         val activeSession = session ?: return initErrorResult()
         return runCatching {
             val start = System.nanoTime()
@@ -117,7 +117,7 @@ class MoqiImeSession(
         }
     }
 
-    fun deleteCandidateOnCurrentPage(index: Int): MoqiImeResult {
+    override fun deleteCandidateOnCurrentPage(index: Int): MoqiImeResult {
         val activeSession = session ?: return initErrorResult()
         return runCatching {
             val start = System.nanoTime()
@@ -134,7 +134,7 @@ class MoqiImeSession(
         }
     }
 
-    fun replayText(text: String): MoqiImeResult {
+    override fun replayText(text: String): MoqiImeResult {
         val activeSession = session ?: return initErrorResult()
         return runCatching {
             val start = System.nanoTime()
@@ -147,7 +147,7 @@ class MoqiImeSession(
         }
     }
 
-    fun changePage(backward: Boolean): MoqiImeResult {
+    override fun changePage(backward: Boolean): MoqiImeResult {
         val activeSession = session ?: return initErrorResult()
         return runCatching {
             val start = System.nanoTime()
@@ -160,7 +160,7 @@ class MoqiImeSession(
         }
     }
 
-    fun command(commandId: Int): MoqiImeResult {
+    override fun command(commandId: Int): MoqiImeResult {
         val activeSession = session ?: return initErrorResult()
         return runCatching {
             val start = System.nanoTime()
@@ -173,7 +173,7 @@ class MoqiImeSession(
         }
     }
 
-    fun schemeSets(): List<String> {
+    override fun schemeSets(): List<String> {
         val activeSession = session ?: return emptyList()
         return runCatching {
             val start = System.nanoTime()
@@ -186,7 +186,7 @@ class MoqiImeSession(
         }
     }
 
-    fun currentSchemeSet(): String {
+    override fun currentSchemeSet(): String {
         val activeSession = session ?: return ""
         return runCatching {
             val start = System.nanoTime()
@@ -199,7 +199,7 @@ class MoqiImeSession(
         }
     }
 
-    fun selectSchemeSet(name: String): MoqiImeResult {
+    override fun selectSchemeSet(name: String): MoqiImeResult {
         val activeSession = session ?: return initErrorResult()
         return runCatching {
             val start = System.nanoTime()
@@ -212,7 +212,7 @@ class MoqiImeSession(
         }
     }
 
-    fun schemaEntries(): List<RimeSchemaEntry> {
+    override fun schemaEntries(): List<RimeSchemaEntry> {
         val activeSession = session ?: return emptyList()
         return runCatching {
             val start = System.nanoTime()
@@ -225,7 +225,7 @@ class MoqiImeSession(
         }
     }
 
-    fun menuEntries(): List<RimeMenuEntry> {
+    override fun menuEntries(): List<RimeMenuEntry> {
         val activeSession = session ?: return emptyList()
         return runCatching {
             val start = System.nanoTime()
@@ -238,7 +238,7 @@ class MoqiImeSession(
         }
     }
 
-    fun currentSchemaId(): String {
+    override fun currentSchemaId(): String {
         val activeSession = session ?: return ""
         return runCatching {
             val start = System.nanoTime()
@@ -251,7 +251,7 @@ class MoqiImeSession(
         }
     }
 
-    fun selectSchema(schemaId: String): MoqiImeResult {
+    override fun selectSchema(schemaId: String): MoqiImeResult {
         val activeSession = session ?: return initErrorResult()
         return runCatching {
             val start = System.nanoTime()
@@ -264,11 +264,11 @@ class MoqiImeSession(
         }
     }
 
-    fun reset(): MoqiImeResult {
+    override fun reset(): MoqiImeResult {
         return keyDown(MoqiImeKeyMapper.VK_ESCAPE)
     }
 
-    fun close() {
+    override fun close() {
         runCatching {
             session?.close()
         }.onFailure { error ->
@@ -357,6 +357,10 @@ object MoqiImeKeyMapper {
     }
 
     fun digit(ch: Char): Pair<Int, Int> = ch.code to ch.code
+
+    // The bridge translates Windows virtual keys before CharCode. ASCII punctuation such as
+    // '!', '.', '/' would otherwise become PageUp, Delete, Help, etc. Zero has no VK mapping.
+    fun symbol(ch: Char): Pair<Int, Int> = 0 to ch.code
 }
 
 private fun MobileResponse?.toResult(): MoqiImeResult {
