@@ -1,31 +1,39 @@
 # 多指按键回归
 
-`PointerMotionInstrumentation` 使用 Android 自带的 `Instrumentation`，不增加依赖。
-它在主线程创建并布局真实 `KeyboardView`，直接发送多指 `MotionEvent`；不启动宿主
-Activity，不向系统全局注入触摸。长按与删除连发通过调用已注册的回调模拟定时器到期，
-因此不验证实际时间间隔、硬件触摸采样或系统手势拦截。
+`PointerMotionInstrumentation` 是标准 `InstrumentationTestCase` 测试类（不是 runner），
+与 `CandidatePagingDeviceTest` 共用 `android.test.InstrumentationTestRunner`。
+每例在主线程创建真实 `KeyboardView`，先 EXACTLY measure 1080×720，再 layout，
+随后直接发送多指 `MotionEvent`；不启动 Activity，不向系统全局注入触摸。
+长按与删除连发均手动调用已注册的 Runnable 模拟到期，**不验证真实计时**、
+硬件触摸采样、系统手势拦截、真实录音或 IME 输入连接。
 
-仅编译测试，不连接或安装设备：
-
-```powershell
-./gradlew.bat :app:compileFullDebugAndroidTestKotlin
-```
-
-需要执行时，在测试设备上安装完整版本及测试 APK，并启动已配置的 runner：
+仅编译/打包，不连接或安装设备：
 
 ```powershell
-./gradlew.bat :app:connectedFullDebugAndroidTest
+./gradlew.bat :app:compileFullDebugAndroidTestKotlin :app:assembleFullDebugAndroidTest
 ```
 
-也可以在 APK 已安装后直接运行：
+以下设备命令仅供获得设备操作授权的执行者使用。务必加 class 过滤，以免意外运行
+需要真实 Rime 环境的候选分页测试。正式 full APK 使用 `com.moqi.im`，安装会覆盖同包应用；
+不要在用户日常使用设备上未经确认安装。可在独立构建副本更改 applicationId 做隔离验证，
+不可将隔离包名提交到正式配置。
 
 ```powershell
-adb shell am instrument -w com.moqi.im.test/com.moqi.im.keyboard.PointerMotionInstrumentation
+./gradlew.bat :app:connectedFullDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.moqi.im.keyboard.PointerMotionInstrumentation
+# 或者，应用和测试 APK 已安装后（隔离包须替换测试包名）：
+adb shell am instrument -w -e class com.moqi.im.keyboard.PointerMotionInstrumentation com.moqi.im.test/android.test.InstrumentationTestRunner
 ```
 
-成功结果为 `result=PASS: 8 cases` 和 `INSTRUMENTATION_CODE: -1`；失败结果包含异常堆栈，
-结果码为 `0`。这不是 AndroidJUnitRunner；手动执行时应检查结果字段，不能只看 adb 进程退出码。
+标准 runner 应报告 `OK (8 tests)`；失败应检查 `FAILURES!!!` 和异常堆栈，不能只看
+adb 进程退出码。编译成功不代表这八例已在设备上执行。
 
 覆盖：旧指先抬、新指先抬、三指交叠、取消未完成按键、MOVE 使用正确指针坐标、
-删除连发后的指针交接、长按空格松手、长按空格取消。另有 `PointerRolloverTest`
-覆盖纯状态机，可用 `./gradlew.bat :app:testFullDebugUnitTest` 运行。
+删除连发后的指针交接、长按空格松手、长按空格取消。
+
+主机回归另有 `PointerRolloverTest`（9 例纯状态机）及 `KeyboardPointerMotionTest`
+（11 例真实 View，包括 measure 前提、弹窗、滑动、侧栏独占和计时器交接）。
+Robolectric 同样手动触发 Runnable，不等价于硬件计时实测。
+
+```powershell
+./gradlew.bat :app:testLiteDebugUnitTest :app:testFullDebugUnitTest
+```

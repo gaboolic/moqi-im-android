@@ -6,6 +6,9 @@ plugins {
 android {
     namespace = "com.moqi.im"
     compileSdk = 34
+    // Platform instrumentation runner: real native-engine tests without a mock bridge.
+    useLibrary("android.test.runner", false)
+    useLibrary("android.test.base", false)
 
     signingConfigs {
         create("release") {
@@ -26,7 +29,7 @@ android {
         targetSdk = 34
         versionCode = 3
         versionName = "1.0.0"
-        testInstrumentationRunner = "com.moqi.im.keyboard.PointerMotionInstrumentation"
+        testInstrumentationRunner = "android.test.InstrumentationTestRunner"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -68,6 +71,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     kotlinOptions {
         jvmTarget = "17"
     }
@@ -84,6 +91,7 @@ dependencies {
     add("fullImplementation", files("libs/sherpa-onnx-1.13.0.aar"))
     implementation(files("libs/moqi-ime.aar"))
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.12.2")
 }
 
 // 应用模型下载脚本（可选：构建时自动下载模型）

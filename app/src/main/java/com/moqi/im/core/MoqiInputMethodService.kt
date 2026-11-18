@@ -42,6 +42,8 @@ import com.moqi.im.keyboard.KeyCode
 import com.moqi.im.keyboard.CandidateActionMenu
 import com.moqi.im.keyboard.KeyboardMenuView
 import com.moqi.im.keyboard.KeyboardView
+import com.moqi.im.keyboard.SymbolInputPolicy
+import com.moqi.im.keyboard.KeyboardInputQueue
 import com.moqi.im.cloudclipboard.CloudClipboardGuard
 import com.moqi.im.cloudclipboard.CloudClipboardPrefs
 import com.moqi.im.cloudclipboard.CloudClipboardSync
@@ -74,6 +76,8 @@ class MoqiInputMethodService : InputMethodService() {
         private const val PREF_KEYBOARD_HEIGHT = "keyboard_height"
         private const val DEFAULT_KEYBOARD_HEIGHT_PERCENT = 100
     }
+
+    private val keyboardInputQueue = KeyboardInputQueue()
 
     override fun onEvaluateFullscreenMode(): Boolean = false
 
@@ -153,7 +157,11 @@ class MoqiInputMethodService : InputMethodService() {
             composeView?.setComposingText(RIME_INIT_MESSAGE)
         }
     }
+    // Last cached UI page; the engine tracks its own page exclusively on its worker thread.
     private var expandedCandidatePageIndex: Int = 0
+    private var isCandidateExpanded: Boolean = false
+    private var expandedCandidateGeneration: Long = 0
+    private var isExpandedCandidateSelecting: Boolean = false
     private var isExpandedCandidateLoading: Boolean = false
     private var expandedCandidateInitialPrefetchRemaining: Int = 0
     private var dismissedClipboardText: String? = null
@@ -188,8 +196,7 @@ class MoqiInputMethodService : InputMethodService() {
             getSystemService(VIBRATOR_SERVICE) as Vibrator
         }
     }
-    private var t9TapCount: Int = 0
-    private var t9CurrentKey: Int = 0
+    private val t9MultiTap = T9MultiTap()
     private var t9PinyinDigits: StringBuilder = StringBuilder()
     private var t9ActiveSegmentIndex: Int = 0
     private val t9SelectedPinyinBySegment = mutableMapOf<Int, String>()
@@ -255,12 +262,15 @@ class MoqiInputMethodService : InputMethodService() {
         inputPanelView = imeView?.findViewById(com.moqi.im.R.id.input_panel)
 
         keyboardView?.setOnKeyListener { keyCode, isShifted, swipeText ->
-            if (keyCode == KeyCode.T9_PINYIN_OPTION && swipeText != null) {
-                handleT9PinyinOption(swipeText)
-            } else if (swipeText != null) {
-                handleSwipeText(swipeText)
-            } else {
-                handleKey(keyCode, isShifted)
+            val literalPanel = keyboardView?.isDirectCommitLayout() == true
+            keyboardInputQueue.dispatch {
+                if (keyCode == KeyCode.T9_PINYIN_OPTION && swipeText != null) {
+                    handleT9PinyinOption(swipeText)
+                } else if (swipeText != null) {
+                    handleSwipeText(swipeText, literalPanel)
+                } else {
+                    handleKey(keyCode, isShifted)
+                }
             }
         }
         keyboardView?.setOnSpaceLongPressListener { pressed ->
@@ -319,6 +329,7 @@ class MoqiInputMethodService : InputMethodService() {
         }
 
         candidateView?.setOnCandidateIndexSelectedListener { index ->
+            if (isExpandedCandidateSelecting) return@setOnCandidateIndexSelectedListener
             val candidateView = candidateView ?: return@setOnCandidateIndexSelectedListener
             val entry = candidateView.getCandidateEntry(index)
             if (entry?.source == CandidateEntrySource.CLIPBOARD) {
@@ -408,8 +419,10 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     override fun onFinishInput() {
+        keyboardInputQueue.clear()
         candidateView?.dismissActionMenu()
         inputSessionActive = false
+        resetT9State()
         super.onFinishInput()
     }
 
@@ -459,9 +472,9 @@ class MoqiInputMethodService : InputMethodService() {
                 if (currentMode == InputMode.ENGLISH) {
                     commitText(",")
                 } else if (shouldCommitT9CompositionBeforeSymbol("，")) {
-                    commitT9CompositionThenText("，")
+                    commitCompositionThenText("，")
                 } else {
-                    submitMoqiKey(','.code, ','.code, fallbackOnSuccessOnly = true) {
+                    submitMoqiKey(0, ','.code, fallbackOnFailure = true) {
                         commitText("，")
                     }
                 }
@@ -470,9 +483,9 @@ class MoqiInputMethodService : InputMethodService() {
                 if (currentMode == InputMode.ENGLISH) {
                     commitText(".")
                 } else if (shouldCommitT9CompositionBeforeSymbol("。")) {
-                    commitT9CompositionThenText("。")
+                    commitCompositionThenText("。")
                 } else {
-                    submitMoqiKey(MoqiImeKeyMapper.VK_OEM_PERIOD, '.'.code, fallbackOnSuccessOnly = true) {
+                    submitMoqiKey(0, '.'.code, fallbackOnFailure = true) {
                         commitText("。")
                     }
                 }
@@ -495,46 +508,34 @@ class MoqiInputMethodService : InputMethodService() {
         }
     }
 
-    private fun handleSwipeText(text: String) {
+    private fun handleSwipeText(text: String, literalPanel: Boolean) {
         if (text.isBlank()) return
         performKeyFeedback()
-        val normalizedText = normalizeSwipeTextForMode(text)
-        if (keyboardView?.isDirectCommitLayout() == true) {
-            commitText(normalizedText)
-            return
-        }
-        if (isT9Mode && normalizedText.length == 1 && normalizedText[0].isDigit()) {
-            commitText(normalizedText)
-            return
-        }
-        if (currentMode == InputMode.ENGLISH) {
-            if (isPairedSymbol(normalizedText)) {
-                commitPairedText(normalizedText)
-                return
+        val input = SymbolInputPolicy.resolve(
+            text = text,
+            english = currentMode == InputMode.ENGLISH,
+            literalPanel = literalPanel || (isT9Mode && text.length == 1 && text[0].isDigit()),
+            t9Composing = isT9Mode && currentMode == InputMode.PINYIN && t9PinyinDigits.isNotEmpty(),
+            // The worker must check its ordered state, not a potentially stale UI composition snapshot.
+            composing = currentMode != InputMode.ENGLISH
+        )
+        when (input.route) {
+            SymbolInputPolicy.Route.DIRECT -> commitText(input.text)
+            SymbolInputPolicy.Route.PAIRED -> commitPairedText(input.text)
+            SymbolInputPolicy.Route.COMMIT_COMPOSITION_THEN_TEXT ->
+                commitCompositionThenText(input.text, paired = isPairedSymbol(input.text))
+            SymbolInputPolicy.Route.ENGINE -> {
+                val (keyCode, charCode) = MoqiImeKeyMapper.symbol(input.text.single())
+                // Slash must reach Rime first; never silently commit it on initialization/errors.
+                submitMoqiKey(keyCode, charCode, fallbackOnFailure = input.text != "/") {
+                    commitText(input.text)
+                }
             }
-            commitText(normalizedText)
-            return
-        }
-        if (shouldCommitT9CompositionBeforeSymbol(normalizedText)) {
-            commitT9CompositionThenText(normalizedText, paired = isPairedSymbol(normalizedText))
-            return
-        }
-        if (isPairedSymbol(normalizedText)) {
-            commitPairedText(normalizedText)
-            return
-        }
-        if (normalizedText.length == 1) {
-            val ch = normalizedText[0]
-            submitMoqiKey(ch.code, ch.code, fallbackOnSuccessOnly = true) {
-                commitText(normalizedText)
-            }
-        } else {
-            commitText(normalizedText)
         }
     }
 
     private fun isPairedSymbol(text: String): Boolean {
-        return text == "“”" || text == "（）" || text == "\"\"" || text == "()"
+        return SymbolInputPolicy.isPaired(text)
     }
 
     private fun shouldCommitT9CompositionBeforeSymbol(text: String): Boolean {
@@ -545,7 +546,7 @@ class MoqiInputMethodService : InputMethodService() {
             text.none { it.isLetterOrDigit() }
     }
 
-    private fun commitT9CompositionThenText(text: String, paired: Boolean = false) {
+    private fun commitCompositionThenText(text: String, paired: Boolean = false) {
         if (!::engineRunner.isInitialized) {
             if (paired) commitPairedText(text) else commitText(text)
             return
@@ -557,38 +558,17 @@ class MoqiInputMethodService : InputMethodService() {
                 commitText(text)
             }
         }
-        val generation = ++t9ReplayGeneration
-        engineRunner.selectCandidate(0) { engineResult ->
-            if (generation != t9ReplayGeneration) {
-                ImeDebugLog.d(TAG) {
-                    "discard stale T9 symbol commit generation=$generation current=$t9ReplayGeneration"
-                }
-                return@selectCandidate
-            }
+        val token = keyboardInputQueue.pause()
+        ++t9ReplayGeneration // Invalidate replay snapshots, never a result carrying a commit.
+        engineRunner.commitComposition { engineResult ->
+            if (!keyboardInputQueue.isCurrent(token)) return@commitComposition
             applyMoqiResult(engineResult.result)
-            commitSymbol()
-        }
-    }
-
-    private fun normalizeSwipeTextForMode(text: String): String {
-        return if (currentMode == InputMode.ENGLISH) {
-            when (text) {
-                "“”" -> "\"\""
-                "（）" -> "()"
-                "，" -> ","
-                "。" -> "."
-                "：" -> ":"
-                "；" -> ";"
-                else -> text
+            if (engineResult.result.success && engineResult.result.composition.isBlank()) {
+                commitSymbol()
+            } else {
+                showMessage("无法结束当前组词，请先选择候选后再输入符号")
             }
-        } else {
-            when (text) {
-                "\"\"" -> "“”"
-                "()" -> "（）"
-                ":" -> "："
-                ";" -> "；"
-                else -> text
-            }
+            keyboardInputQueue.resume(token)
         }
     }
 
@@ -604,24 +584,9 @@ class MoqiInputMethodService : InputMethodService() {
 
         t9Runnable?.let { handler.removeCallbacks(it) }
 
-        if (t9CurrentKey == keyCode && t9TapCount < chars.length - 1) {
-            t9TapCount++
-        } else {
-            if (t9CurrentKey != 0 && t9TapCount > 0) {
-                val prevChars = t9KeyMap[t9CurrentKey]
-                if (prevChars != null && t9TapCount < prevChars.length) {
-                    commitText(prevChars[t9TapCount].toString())
-                }
-            }
-            t9TapCount = 0
-            t9CurrentKey = keyCode
-        }
-
+        t9MultiTap.press(keyCode, chars)?.let { commitText(it) }
         t9Runnable = Runnable {
-            val currentChars = t9KeyMap[t9CurrentKey]
-            if (currentChars != null && t9TapCount < currentChars.length) {
-                commitText(currentChars[t9TapCount].toString())
-            }
+            t9MultiTap.take()?.let { commitText(it) }
             resetT9State()
         }
         handler.postDelayed(t9Runnable!!, T9_TIMEOUT)
@@ -787,8 +752,8 @@ class MoqiInputMethodService : InputMethodService() {
 
     private fun resetT9State() {
         t9ReplayGeneration++
-        t9TapCount = 0
-        t9CurrentKey = 0
+        t9Runnable?.let { handler.removeCallbacks(it) }
+        t9MultiTap.clear()
         t9PinyinDigits.clear()
         t9SelectedPinyinBySegment.clear()
         t9InferredPinyinBySegment.clear()
@@ -823,6 +788,11 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun handleBackspace() {
+        val connection = currentInputConnection ?: return
+        if (EditorBackspace.deleteSelection(connection)) {
+            clearTextEngineState()
+            return
+        }
         if (keyboardView?.isDirectCommitLayout() == true) {
             deleteSurroundingCodePoint()
             return
@@ -867,6 +837,10 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun handleSpace() {
+        if (keyboardView?.isDirectCommitLayout() == true) {
+            commitText(" ")
+            return
+        }
         submitMoqiKey(MoqiImeKeyMapper.VK_SPACE, ' '.code, fallbackOnFailure = true) {
             sendKeyChar(' ')
         }
@@ -1028,6 +1002,7 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun resetTextEngine() {
+        if (keyboardInputQueue.paused) keyboardInputQueue.clear()
         if (::engineRunner.isInitialized) {
             isEngineInitializing = true
             showRimeInitializingIfNeeded()
@@ -1045,6 +1020,7 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun clearTextEngineState() {
+        keyboardInputQueue.clear()
         if (::engineRunner.isInitialized) {
             engineRunner.resetComposition()
         }
@@ -1071,7 +1047,7 @@ class MoqiInputMethodService : InputMethodService() {
             return false
         }
 
-        if (result.commit.isNotBlank()) {
+        if (result.commit.isNotEmpty()) {
             consumeClipboardSuggestion()
             currentInputConnection.commitText(result.commit, 1)
             t9PinyinDigits.clear()
@@ -1168,7 +1144,6 @@ class MoqiInputMethodService : InputMethodService() {
     private fun submitMoqiKey(
         keyCode: Int,
         charCode: Int = 0,
-        fallbackOnSuccessOnly: Boolean = false,
         fallbackOnFailure: Boolean = false,
         retryFullPinyinOnUnhandled: Boolean = false,
         fallback: (() -> Unit)? = null
@@ -1180,11 +1155,9 @@ class MoqiInputMethodService : InputMethodService() {
             }
             return
         }
-        val t9Generation = t9ReplayGeneration
         engineRunner.keyDown(keyCode, charCode) { engineResult ->
-            if (isT9Mode && currentMode == InputMode.PINYIN && t9Generation != t9ReplayGeneration) {
-                return@keyDown
-            }
+            // keyDown may carry a consumed commit. Only the runner's session generation may
+            // invalidate it; a later T9 replay/symbol is not grounds to drop committed text.
             val result = engineResult.result
             ImeDebugLog.d(TAG) {
                 "engineResult seq=${engineResult.sequence} mode=$currentMode keyCode=$keyCode charCode=$charCode " +
@@ -1196,8 +1169,8 @@ class MoqiInputMethodService : InputMethodService() {
                 retryKeyWithFullPinyin(keyCode, charCode)
                 return@keyDown
             }
-            val shouldFallback = fallback != null && !handled &&
-                ((fallbackOnSuccessOnly && result.success) || fallbackOnFailure || (!fallbackOnSuccessOnly && result.success))
+            val shouldFallback = fallback != null && !handled && result.commit.isEmpty() &&
+                (fallbackOnFailure || result.success)
             if (shouldFallback) {
                 fallback?.invoke()
             }
@@ -1284,6 +1257,7 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun updateCandidateEntries(entries: List<CandidateEntry>) {
+        isExpandedCandidateSelecting = false
         hasActiveImeCandidates = entries.any { it.source == CandidateEntrySource.RIME }
         candidateView?.setCandidateEntries(withClipboardCandidate(entries))
     }
@@ -1454,9 +1428,12 @@ class MoqiInputMethodService : InputMethodService() {
 
     private fun setCandidateExpanded(expanded: Boolean) {
         val view = candidateView ?: return
+        // Invalidate in-flight callbacks on collapse, reopen, or a new candidate result.
+        expandedCandidateGeneration += 1
+        isCandidateExpanded = expanded
+        isExpandedCandidateLoading = false
         if (expanded) {
             expandedCandidatePageIndex = 0
-            isExpandedCandidateLoading = false
             expandedCandidateInitialPrefetchRemaining = INITIAL_EXPANDED_PREFETCH_PAGES
         } else {
             expandedCandidateInitialPrefetchRemaining = 0
@@ -1474,11 +1451,8 @@ class MoqiInputMethodService : InputMethodService() {
             params.height = targetHeight
             view.layoutParams = params
         }
-        if (keyboardMenuView?.visibility != View.VISIBLE) {
-            if (!expanded) {
-                updateKeyboard()
-            }
-        }
+        // Expanding candidates only hides the keyboard; collapsing must restore the
+        // existing layout rather than replacing NUMBER/SYMBOL/EMOJI with text keys.
         if (expanded) {
             view.bringToFront()
         }
@@ -1494,20 +1468,25 @@ class MoqiInputMethodService : InputMethodService() {
             showRimeInitializingIfNeeded()
             return
         }
-        if (isExpandedCandidateLoading) return
+        if (!isCandidateExpanded || isExpandedCandidateSelecting || isExpandedCandidateLoading) return
         isExpandedCandidateLoading = true
+        val generation = expandedCandidateGeneration
+        val targetPageIndex = expandedCandidatePageIndex + 1
         val isInitialPrefetch = expandedCandidateInitialPrefetchRemaining > 0
-        engineRunner.changeCandidatePage(backward = false) { engineResult ->
+        engineRunner.loadCandidatePage(targetPageIndex) { engineResult ->
+            if (generation != expandedCandidateGeneration || !isCandidateExpanded || isExpandedCandidateSelecting) {
+                return@loadCandidatePage
+            }
             val result = engineResult.result
             if (!result.success) {
                 isExpandedCandidateLoading = false
                 expandedCandidateInitialPrefetchRemaining = 0
                 applyMoqiResult(result)
-                return@changeCandidatePage
+                return@loadCandidatePage
             }
             isExpandedCandidateLoading = false
             if (result.handled && result.showCandidates && result.candidateEntries.isNotEmpty()) {
-                expandedCandidatePageIndex += 1
+                expandedCandidatePageIndex = targetPageIndex
                 if (isInitialPrefetch) {
                     expandedCandidateInitialPrefetchRemaining =
                         (expandedCandidateInitialPrefetchRemaining - 1).coerceAtLeast(0)
@@ -1517,7 +1496,9 @@ class MoqiInputMethodService : InputMethodService() {
                     entries = candidateEntriesForDisplay(result.candidateEntries)
                 )
                 if (expandedCandidateInitialPrefetchRemaining > 0) {
-                    handler.post { loadNextExpandedCandidatePage() }
+                    handler.post {
+                        if (generation == expandedCandidateGeneration) loadNextExpandedCandidatePage()
+                    }
                 }
             } else {
                 expandedCandidateInitialPrefetchRemaining = 0
@@ -1530,6 +1511,7 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun selectExpandedCandidate(pageIndex: Int, pageLocalIndex: Int) {
+        if (isExpandedCandidateSelecting) return
         if (pageIndex == 0) {
             val view = candidateView
             val entry = view?.getCurrentPageCandidateEntry(pageLocalIndex)
@@ -1548,37 +1530,14 @@ class MoqiInputMethodService : InputMethodService() {
             pageLocalIndex
         }
         if (targetLocalIndex < 0) return
-        moveToExpandedCandidatePage(pageIndex) {
-            engineRunner.selectCandidate(targetLocalIndex) { engineResult ->
-                applyMoqiResult(engineResult.result)
-            }
-        }
-    }
-
-    private fun moveToExpandedCandidatePage(targetPageIndex: Int, onReady: () -> Unit) {
-        val delta = targetPageIndex - expandedCandidatePageIndex
-        if (delta == 0) {
-            onReady()
-            return
-        }
-        val backward = delta < 0
-        val steps = kotlin.math.abs(delta)
-        moveExpandedCandidatePageStep(backward, steps, onReady)
-    }
-
-    private fun moveExpandedCandidatePageStep(backward: Boolean, remainingSteps: Int, onReady: () -> Unit) {
-        if (remainingSteps <= 0) {
-            onReady()
-            return
-        }
-        engineRunner.changeCandidatePage(backward = backward) { engineResult ->
-            val result = engineResult.result
-            if (!result.success || !result.handled) {
-                applyMoqiResult(result)
-                return@changeCandidatePage
-            }
-            expandedCandidatePageIndex += if (backward) -1 else 1
-            moveExpandedCandidatePageStep(backward, remainingSteps - 1, onReady)
+        // Stop queued prefetch continuations before submitting the atomic engine operation.
+        expandedCandidateGeneration += 1
+        expandedCandidateInitialPrefetchRemaining = 0
+        isExpandedCandidateLoading = false
+        isExpandedCandidateSelecting = true
+        engineRunner.selectCandidateOnPage(pageIndex, targetLocalIndex) { engineResult ->
+            isExpandedCandidateSelecting = false
+            applyMoqiResult(engineResult.result)
         }
     }
 

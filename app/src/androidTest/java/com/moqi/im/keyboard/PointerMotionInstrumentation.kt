@@ -1,53 +1,32 @@
 package com.moqi.im.keyboard
 
-import android.app.Activity
-import android.app.Instrumentation
+import android.test.InstrumentationTestCase
 import android.graphics.PointF
 import android.graphics.RectF
-import android.os.Bundle
 import android.os.SystemClock
 import android.view.MotionEvent
 
-/** 配置为 instrumentation runner 后可运行；不依赖测试 Activity 或全局触摸注入。 */
-class PointerMotionInstrumentation : Instrumentation() {
-    override fun onCreate(arguments: Bundle?) {
-        super.onCreate(arguments)
-        start()
-    }
+/** Standard runner tests; no Activity or global touch injection required. */
+@Suppress("DEPRECATION")
+class PointerMotionInstrumentation : InstrumentationTestCase() {
+    fun testOldFingerUpFirst() = onMain { overlap(oldFirst = true) }
+    fun testNewFingerUpFirst() = onMain { overlap(oldFirst = false) }
+    fun testThreeFingers() = onMain { threeFingers() }
+    fun testCancelPending() = onMain { cancelPending() }
+    fun testActiveCoordinates() = onMain { activeCoordinates() }
+    fun testDeleteRollover() = onMain { deleteRollover() }
+    fun testHeldSpaceRelease() = onMain { heldSpace(cancel = false) }
+    fun testHeldSpaceCancel() = onMain { heldSpace(cancel = true) }
 
-    override fun onStart() {
-        var failures = 0
-        val failure = runCatching {
-            lateinit var cases: PointerMotionCases
-            onMain { cases = PointerMotionCases(targetContext) }?.let { throw it }
-            cases.run { name, index, block ->
-                val status = Bundle().apply {
-                    putString("id", "InstrumentationTestRunner")
-                    putString("class", PointerMotionInstrumentation::class.java.name)
-                    putString("test", name)
-                    putInt("numtests", 8)
-                    putInt("current", index)
-                }
-                sendStatus(1, status)
-                val error = onMain(block)
-                if (error != null) {
-                    failures++
-                    status.putString("stack", error.stackTraceToString())
-                }
-                sendStatus(if (error == null) 0 else -2, status)
-            }
-        }.exceptionOrNull()
-        finish(if (failure == null && failures == 0) Activity.RESULT_OK else Activity.RESULT_CANCELED,
-            Bundle().apply {
-                putString("result", failure?.stackTraceToString() ?:
-                    if (failures == 0) "PASS: 8 cases" else "FAIL: $failures cases")
-            })
-    }
-
-    private fun onMain(block: () -> Unit): Throwable? {
+    private fun onMain(block: PointerMotionCases.() -> Unit) {
         var failure: Throwable? = null
-        runOnMainSync { failure = runCatching(block).exceptionOrNull() }
-        return failure
+        instrumentation.runOnMainSync {
+            failure = runCatching {
+                val cases = PointerMotionCases(instrumentation.targetContext)
+                try { cases.block() } finally { cases.dispose() }
+            }.exceptionOrNull()
+        }
+        failure?.let { throw it }
     }
 }
 
@@ -61,21 +40,21 @@ private class PointerMotionCases(context: android.content.Context) {
         view.setLayout(KeyboardView.Layout.T9_CN)
         view.setOnKeyListener { code, _, _ -> keys.add(code) }
         view.setOnSpaceLongPressListener { voice.add(it) }
+        // KeyboardView initializes keyRects in onMeasure, not in layout.
+        view.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(720, android.view.View.MeasureSpec.EXACTLY),
+        )
         view.layout(0, 0, 1080, 720)
     }
 
-    fun run(record: (String, Int, () -> Unit) -> Unit) {
-        record("oldFingerUpFirst", 1) { overlap(oldFirst = true) }
-        record("newFingerUpFirst", 2) { overlap(oldFirst = false) }
-        record("threeFingers", 3) { threeFingers() }
-        record("cancelPending", 4) { cancelPending() }
-        record("activeCoordinates", 5) { activeCoordinates() }
-        record("deleteRollover", 6) { deleteRollover() }
-        record("heldSpaceRelease", 7) { heldSpace(cancel = false) }
-        record("heldSpaceCancel", 8) { heldSpace(cancel = true) }
+    fun dispose() {
+        // Clear pending long-press/repeat work even when an assertion fails.
+        if (fingers.isNotEmpty()) dispatch(MotionEvent.ACTION_CANCEL)
+        fingers.clear()
     }
 
-    private fun threeFingers() {
+    fun threeFingers() {
         reset()
         down(4, KeyCode.T9_2)
         down(8, KeyCode.T9_3)
@@ -84,7 +63,7 @@ private class PointerMotionCases(context: android.content.Context) {
         expect(KeyCode.T9_2, KeyCode.T9_3, KeyCode.T9_4)
     }
 
-    private fun overlap(oldFirst: Boolean) {
+    fun overlap(oldFirst: Boolean) {
         reset()
         down(7, KeyCode.T9_2)
         down(19, KeyCode.T9_3)
@@ -93,7 +72,7 @@ private class PointerMotionCases(context: android.content.Context) {
         expect(KeyCode.T9_2, KeyCode.T9_3)
     }
 
-    private fun cancelPending() {
+    fun cancelPending() {
         reset()
         down(7, KeyCode.T9_2)
         down(19, KeyCode.T9_3)
@@ -103,7 +82,7 @@ private class PointerMotionCases(context: android.content.Context) {
         check(field("t9LetterLongPressRunnable") == null)
     }
 
-    private fun activeCoordinates() {
+    fun activeCoordinates() {
         reset()
         down(7, KeyCode.T9_2)
         down(19, KeyCode.T9_3)
@@ -113,7 +92,7 @@ private class PointerMotionCases(context: android.content.Context) {
         expect(KeyCode.T9_2, KeyCode.T9_3)
     }
 
-    private fun deleteRollover() {
+    fun deleteRollover() {
         reset()
         down(7, KeyCode.DELETE)
         (field("repeatRunnable") as Runnable).run()
@@ -123,7 +102,7 @@ private class PointerMotionCases(context: android.content.Context) {
         expect(KeyCode.DELETE, KeyCode.DELETE, KeyCode.T9_3)
     }
 
-    private fun heldSpace(cancel: Boolean) {
+    fun heldSpace(cancel: Boolean) {
         reset()
         down(7, KeyCode.SPACE)
         // 直接触发已排队回调，不依赖测试设备的定时器调度。

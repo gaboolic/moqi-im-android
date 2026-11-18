@@ -45,6 +45,7 @@ class KeyboardView @JvmOverloads constructor(
     private var keyHeight: Float = 0f
     private var keyGap: Float = 0f
     private var currentLayout: Layout = Layout.QWERTY_CN
+    private var englishTextLayout: Boolean = false
     private var currentSymbolPage: SymbolPage = SymbolPage.COMMON
     private var currentEmojiMode: EmojiMode = EmojiMode.EMOJI
     private var currentEmojiCategoryIndex: Int = 0
@@ -109,6 +110,11 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     fun setLayout(layout: Layout) {
+        englishTextLayout = when (layout) {
+            Layout.QWERTY_EN, Layout.T9_EN -> true
+            Layout.QWERTY_CN, Layout.T9_CN -> false
+            else -> englishTextLayout
+        }
         currentLayout = layout
         rows = when (layout) {
             Layout.QWERTY_CN -> qwertyCnRows()
@@ -1140,7 +1146,7 @@ class KeyboardView @JvmOverloads constructor(
         if (!showT9SideFallback) {
             return emptyList()
         }
-        return listOf("，", "。", "？", "：", "！", "…", "；", "、", ".", "-", "@").map { symbol ->
+        return SymbolInputPolicy.t9Symbols(englishTextLayout).map { symbol ->
             KeyDefinition(symbol, symbol.singleOrNull()?.code ?: symbol.first().code, 0.72f, commitText = symbol)
         }
     }
@@ -1180,7 +1186,7 @@ class KeyboardView @JvmOverloads constructor(
     private fun symbolRows(): List<List<KeyDefinition>> {
         val symbols = when (currentSymbolPage) {
             SymbolPage.COMMON -> listOf(
-                listOf("-", "，", "。", "?"),
+                listOf("-", if (englishTextLayout) "," else "，", if (englishTextLayout) "." else "。", "?"),
                 listOf("!", "✓", "×", "@"),
                 listOf(".", "~", "#", "_"),
                 listOf("'", ".com", ":", "*")
