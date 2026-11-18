@@ -803,6 +803,11 @@ class MoqiInputMethodService : InputMethodService() {
     }
 
     private fun handleBackspace() {
+        val connection = currentInputConnection ?: return
+        if (EditorBackspace.deleteSelection(connection)) {
+            clearTextEngineState()
+            return
+        }
         if (keyboardView?.isDirectCommitLayout() == true) {
             deleteSurroundingCodePoint()
             return
