@@ -31,6 +31,9 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      - name: Test Sherpa JNI contract checker
+        run: python3 -B -m unittest discover -s scripts/tests -v
+
       - name: Run tests and build debug APKs
         run: >-
           ./gradlew :app:testLiteDebugUnitTest :app:testFullDebugUnitTest
@@ -83,6 +86,9 @@ jobs:
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      - name: Verify Sherpa JNI names after R8
+        run: python3 -B scripts/check_sherpa_jni_mapping.py
 
       - name: Upload full APK
         uses: actions/upload-artifact@v4

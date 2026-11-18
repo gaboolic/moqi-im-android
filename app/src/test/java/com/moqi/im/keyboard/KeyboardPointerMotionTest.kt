@@ -3,6 +3,7 @@ package com.moqi.im.keyboard
 import android.graphics.PointF
 import android.graphics.RectF
 import android.os.SystemClock
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import org.junit.After
@@ -138,6 +139,45 @@ class KeyboardPointerMotionTest {
         runTimer("t9LetterLongPressRunnable")
         up(7); up(19)
         assertEquals(listOf(KeyCode.T9_2 to null, 'e'.code to "e"), keys)
+    }
+
+    @Test fun qwertyCaiWithOldFingerLiftedFirstKeepsMiddleLetter() {
+        useQwerty()
+        down(7, KeyEvent.KEYCODE_C); down(19, KeyEvent.KEYCODE_A)
+        up(7)
+        down(7, KeyEvent.KEYCODE_I)
+        up(19); up(7)
+        assertCodes(KeyEvent.KEYCODE_C, KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_I)
+    }
+
+    @Test fun qwertyCaiWithActiveFingerLiftedFirstKeepsMiddleLetter() {
+        useQwerty()
+        down(7, KeyEvent.KEYCODE_C); down(19, KeyEvent.KEYCODE_A)
+        up(19); up(7)
+        down(7, KeyEvent.KEYCODE_I); up(7)
+        assertCodes(KeyEvent.KEYCODE_C, KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_I)
+    }
+
+    @Test fun qwertyCaiWithThreeOverlappingFingersEmitsEachLetterOnce() {
+        useQwerty()
+        down(7, KeyEvent.KEYCODE_C); down(19, KeyEvent.KEYCODE_A); down(23, KeyEvent.KEYCODE_I)
+        up(19); up(7); up(23)
+        assertCodes(KeyEvent.KEYCODE_C, KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_I)
+    }
+
+    @Test fun qwertyCaiWithNonOverlappingTapsStaysUnchanged() {
+        useQwerty()
+        "cai".forEach { letter -> down(7, KeyEvent.KEYCODE_A + (letter - 'a')); up(7) }
+        assertCodes(KeyEvent.KEYCODE_C, KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_I)
+    }
+
+    private fun useQwerty() {
+        view.setLayout(KeyboardView.Layout.QWERTY_CN)
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY),
+        )
+        view.layout(0, 0, 1080, 720)
     }
 
     private fun field(name: String): Any? = KeyboardView::class.java.getDeclaredField(name)
