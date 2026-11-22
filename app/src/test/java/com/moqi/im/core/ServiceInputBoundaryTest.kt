@@ -72,6 +72,43 @@ class ServiceInputBoundaryTest {
         }
     }
 
+    @Test fun strokeKeysStayInRimeAndBackspaceWorksBeforeFirstResult() {
+        val session = object : FakeEngineSession(TextKeyboardLayouts.STROKE_SCHEMA_ID) {
+            override fun keyDown(keyCode: Int, charCode: Int): MoqiImeResult {
+                if (keyCode == MoqiImeKeyMapper.VK_BACK) {
+                    calls += "backspace"
+                    val hadStroke = text.isNotEmpty()
+                    text = text.dropLast(1)
+                    return engineResult(handled = hadStroke, composition = text)
+                }
+                if (charCode == 'p'.code) {
+                    calls += "unhandled:p"
+                    return engineResult(handled = false, composition = text)
+                }
+                return super.keyDown(keyCode, charCode)
+            }
+        }
+        withService(session) { service, worker, connection ->
+            connection.commitText("原", 1)
+            ReflectionHelpers.callInstanceMethod<Unit>(service, "applySchemaLayout",
+                ReflectionHelpers.ClassParameter.from(String::class.java, session.schema))
+            fun stroke(ch: Char) = ReflectionHelpers.callInstanceMethod<Unit>(service, "handleStroke",
+                ReflectionHelpers.ClassParameter.from(Char::class.javaPrimitiveType!!, ch))
+            stroke('h')
+            invoke(service, "handleBackspace") // The UI has not received the first composition yet.
+            stroke('p') // Unhandled by the engine: no pinyin retry and no literal commit.
+            worker.drain()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(listOf("key:h:frost_stroke", "backspace", "unhandled:p"), session.calls)
+            assertEquals("原", connection.editable.toString())
+            assertEquals("", ReflectionHelpers.getField<StringBuilder>(service, "composingText").toString())
+            invoke(service, "handleBackspace") // Empty Rime state falls back to editor deletion.
+            worker.drain()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals("", connection.editable.toString())
+        }
+    }
+
     private fun withService(session: FakeEngineSession,
         test: (MoqiInputMethodService, ManualEngineExecutor, BaseInputConnection) -> Unit) {
         val service = Robolectric.buildService(MoqiInputMethodService::class.java).get()

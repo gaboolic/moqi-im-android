@@ -44,4 +44,11 @@ object KeyCode {
     const val KAOMOJI_MODE = -602
     const val EMOJI_PREV = -603
     const val EMOJI_NEXT = -604
+
+    // Dedicated input events, distinct from literal letters and numbers on other layouts.
+    const val STROKE_HENG = -701
+    const val STROKE_SHU = -702
+    const val STROKE_PIE = -703
+    const val STROKE_NA = -704
+    const val STROKE_ZHE = -705
 }

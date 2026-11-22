@@ -37,7 +37,7 @@ backend's temporary embedded `input_methods/rime/data` directory; do not point i
 at a checkout where that directory contains data you need to preserve.
 The backend's Rime Frost assets and Android native libraries must be available.
 
-This revision's [bundled AAR](../app/libs/moqi-ime.aar) was built from a separate
+The original paging-fix AAR was built from a separate
 clean backend checkout plus this patch, using Go 1.26.4, Android API 24, arm64,
 NDK 26.1.10909125, and the existing bundled librime/C++ shared libraries. No unrelated
 local backend changes were included. The public Java bindings are unchanged.

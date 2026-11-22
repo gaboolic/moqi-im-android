@@ -1,2 +1,4 @@
 # Unified diff context prefixes intentionally precede Go tabs and blank lines.
 patches/*.patch -whitespace
+# These source bytes participate in the embedded Android Rime data hash.
+app/rime-data/*.yaml text eol=lf

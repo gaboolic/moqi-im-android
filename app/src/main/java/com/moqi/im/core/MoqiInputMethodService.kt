@@ -145,6 +145,8 @@ class MoqiInputMethodService : InputMethodService() {
     private var shiftActive: Boolean = false
     private var shiftLocked: Boolean = false
     private var isT9Mode: Boolean = false
+    private val isStrokeMode: Boolean
+        get() = (currentMode == InputMode.PINYIN || currentMode == InputMode.WUBI) && textLayouts.isChineseStroke
     private val textLayouts = TextKeyboardLayouts()
     private var modeBeforeVoice: InputMode = InputMode.PINYIN
     private var sherpaVoiceEngine: SherpaVoiceEngine? = null
@@ -308,6 +310,9 @@ class MoqiInputMethodService : InputMethodService() {
                 }
             }
             override fun onSchema(schemaId: String) {
+                if (textLayouts.isChineseStroke || schemaId == TextKeyboardLayouts.STROKE_SCHEMA_ID) {
+                    clearTextEngineState()
+                }
                 engineRunner.selectSchema(schemaId) { result, current ->
                     if (!result.result.success) {
                         applyMoqiResult(result.result)
@@ -497,6 +502,11 @@ class MoqiInputMethodService : InputMethodService() {
             KeyCode.SWITCH_TO_T9 -> {
                 switchRimeSchemaForLayout(t9 = true)
             }
+            KeyCode.STROKE_HENG -> handleStroke('h')
+            KeyCode.STROKE_SHU -> handleStroke('s')
+            KeyCode.STROKE_PIE -> handleStroke('p')
+            KeyCode.STROKE_NA -> handleStroke('n')
+            KeyCode.STROKE_ZHE -> handleStroke('z')
             in KeyCode.T9_POUND..KeyCode.T9_1 -> handleT9Key(keyCode)
             else -> {
                 val mapped = MoqiImeKeyMapper.fromAndroidKeyCode(keyCode, isShifted || shiftActive)
@@ -571,6 +581,13 @@ class MoqiInputMethodService : InputMethodService() {
             }
             keyboardInputQueue.resume(token)
         }
+    }
+
+    private fun handleStroke(stroke: Char) {
+        if (!isStrokeMode) return
+        val (keyCode, charCode) = MoqiImeKeyMapper.printable(stroke)
+        // A stroke is a Rime code, not a letter to commit or retry in a pinyin schema.
+        submitMoqiKey(keyCode, charCode)
     }
 
     private fun handleT9Key(keyCode: Int) {
@@ -780,7 +797,7 @@ class MoqiInputMethodService : InputMethodService() {
         if (currentMode == InputMode.ENGLISH) {
             commitText(charCode.toChar().toString())
         } else {
-            submitMoqiKey(keyCode, charCode, retryFullPinyinOnUnhandled = true)
+            submitMoqiKey(keyCode, charCode, retryFullPinyinOnUnhandled = !isStrokeMode)
         }
         if (shiftActive && !shiftLocked) {
             shiftActive = false
@@ -796,6 +813,13 @@ class MoqiInputMethodService : InputMethodService() {
         }
         if (keyboardView?.isDirectCommitLayout() == true) {
             deleteSurroundingCodePoint()
+            return
+        }
+        if (isStrokeMode) {
+            // The first stroke may still be queued; let Rime decide whether it has a stroke to delete.
+            submitMoqiKey(MoqiImeKeyMapper.VK_BACK, fallbackOnFailure = true) {
+                deleteSurroundingCodePoint()
+            }
             return
         }
         if (!shouldRouteBackspaceToEngine()) {
@@ -1348,6 +1372,8 @@ class MoqiInputMethodService : InputMethodService() {
     private fun updateKeyboard() {
         val layout = if (currentMode == InputMode.VOICE) {
             KeyboardView.Layout.VOICE
+        } else if (isStrokeMode) {
+            KeyboardView.Layout.T9_STROKE
         } else if (isT9Mode) {
             when (currentMode) {
                 InputMode.ENGLISH -> KeyboardView.Layout.T9_EN

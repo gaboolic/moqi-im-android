@@ -1,8 +1,9 @@
 param(
-    [string]$MoqiImeRoot = (Resolve-Path "$PSScriptRoot\..\..\moqi-ime").Path,
-    [string]$OutputAar = (Resolve-Path "$PSScriptRoot\..").Path + "\app\libs\moqi-ime.aar",
+    [string]$MoqiImeRoot = "$PSScriptRoot\..\..\moqi-ime",
+    [string]$OutputAar = "$PSScriptRoot\..\app\libs\moqi-ime.aar",
     [string]$Target = "android/arm64",
-    [int]$AndroidApi = 24
+    [int]$AndroidApi = 24,
+    [switch]$UsePrebuiltLibrime
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,6 +15,39 @@ function Assert-Command($Name, $InstallHint) {
 }
 
 Assert-Command "go" "Install Go first."
+Assert-Command "jar" "Install a JDK first."
+
+function Add-FrostStrokeSchema {
+    param([string]$TargetDir)
+
+    foreach ($name in @("default.yaml", "stroke.dict.yaml", "essay.txt")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $TargetDir $name) -PathType Leaf)) {
+            throw "The Rime Frost submodule is missing $name; initialize it at the backend's pinned revision."
+        }
+    }
+
+    $schemaName = "frost_stroke.schema.yaml"
+    $schemaSource = Join-Path $PSScriptRoot "..\app\rime-data\$schemaName"
+    Copy-Item -LiteralPath $schemaSource -Destination (Join-Path $TargetDir $schemaName) -Force
+
+    # Stage the Android schema without changing either upstream Frost or user overrides.
+    $defaultPath = Join-Path $TargetDir "default.yaml"
+    $default = [System.IO.File]::ReadAllText($defaultPath)
+    $schemaList = [regex]::Match($default, '(?m)^schema_list:[ \t]*(?<eol>\r?\n)(?<items>(?:[ \t]+[^\r\n]*\r?\n|\r?\n)*)')
+    $items = [regex]::Matches($schemaList.Groups['items'].Value, '(?m)^(?<indent>[ \t]+)- schema:[ \t]+(?<id>[\w-]+)[^\r\n]*')
+    if ($items.Count -eq 0) {
+        throw "Expected a block schema_list in the pinned Rime Frost default.yaml."
+    }
+    foreach ($item in $items) {
+        if ($item.Groups['id'].Value -eq 'frost_stroke') {
+            return
+        }
+    }
+    $last = $items[$items.Count - 1]
+    $end = $schemaList.Groups['items'].Index + $last.Index + $last.Length
+    $entry = $schemaList.Groups['eol'].Value + $last.Groups['indent'].Value + '- schema: frost_stroke'
+    [System.IO.File]::WriteAllText($defaultPath, $default.Insert($end, $entry))
+}
 
 function Sync-RimeFrostData {
     param(
@@ -27,7 +61,6 @@ function Sync-RimeFrostData {
     }
 
     Write-Host "Syncing Rime Frost data for Android embed..."
-    Remove-Item -Recurse -Force $targetDir -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force $targetDir | Out-Null
     Copy-Item -Path (Join-Path $sourceDir "*") -Destination $targetDir -Recurse -Force
 
@@ -35,6 +68,7 @@ function Sync-RimeFrostData {
         Remove-Item -Recurse -Force (Join-Path $targetDir $name) -ErrorAction SilentlyContinue
     }
 
+    Add-FrostStrokeSchema -TargetDir $targetDir
     $version = Get-RimeEmbedVersion -TargetDir $targetDir
     Set-Content -Path (Join-Path $targetDir ".moqi_embed_version") -Value $version -Encoding ASCII
     Write-Host "Rime Frost embed version: $version"
@@ -76,10 +110,19 @@ function Clear-RimeEmbedData {
     New-Item -ItemType Directory -Force $targetDir | Out-Null
 }
 
-$MoqiImeRoot = (Resolve-Path $MoqiImeRoot).Path
-Sync-RimeFrostData -MoqiImeRoot $MoqiImeRoot
+$MoqiImeRoot = (Resolve-Path -LiteralPath $MoqiImeRoot).Path
+$OutputAar = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputAar)
+$embedDir = Join-Path $MoqiImeRoot "input_methods\rime\data"
+if ((Test-Path -LiteralPath $embedDir) -and @(Get-ChildItem -LiteralPath $embedDir -Force).Count -ne 0) {
+    throw "Refusing to overwrite $embedDir. Use a disposable backend checkout with an empty generated data directory."
+}
+
+$toolsDir = Join-Path ([System.IO.Path]::GetTempPath()) ('moqi-ime-tools-' + [guid]::NewGuid().ToString('N'))
+$oldGoBin = $env:GOBIN
+$oldPath = $env:PATH
 
 try {
+Sync-RimeFrostData -MoqiImeRoot $MoqiImeRoot
 $abi = switch ($Target) {
     "android/arm64" { "arm64-v8a" }
     "android/arm" { "armeabi-v7a" }
@@ -88,7 +131,7 @@ $abi = switch ($Target) {
     default { "" }
 }
 
-if ($abi -eq "arm64-v8a") {
+if ($abi -eq "arm64-v8a" -and -not $UsePrebuiltLibrime) {
     $librimeBuildScript = Join-Path $MoqiImeRoot "scripts\build-librime-android.ps1"
     if (Test-Path $librimeBuildScript) {
         Write-Host "Building Android librime native libraries..."
@@ -99,36 +142,26 @@ if ($abi -eq "arm64-v8a") {
     }
 }
 
-$gomobile = Get-Command "gomobile" -ErrorAction SilentlyContinue
-if (-not $gomobile) {
-    $gomobilePath = Join-Path (go env GOPATH) "bin\gomobile.exe"
-    if (-not (Test-Path $gomobilePath)) {
-        Write-Host "Installing gomobile..."
-        go install golang.org/x/mobile/cmd/gomobile@latest
+# Android bind uses the installed NDK. `gomobile init` is unnecessary here and
+# would install gobind@latest, which is incompatible with the pinned gomobile.
+$xMobileVersion = 'v0.0.0-20231127183840-76ac6878050a'
+$env:GOBIN = $toolsDir
+$env:PATH = "$toolsDir$([IO.Path]::PathSeparator)$oldPath"
+$oldGoToolchain = $env:GOTOOLCHAIN
+try {
+    # The pinned x/tools no longer compiles with Go 1.26. Use 1.24 for the
+    # helper binaries only; bind uses the caller's newer Go for the backend.
+    $env:GOTOOLCHAIN = 'go1.24.6'
+    foreach ($tool in @('gomobile', 'gobind')) {
+        go install "golang.org/x/mobile/cmd/$tool@$xMobileVersion"
+        if ($LASTEXITCODE -ne 0) {
+            throw "$tool install failed with exit code $LASTEXITCODE"
+        }
     }
-    $gomobilePath = (Get-Item $gomobilePath).FullName
-} else {
-    $gomobilePath = $gomobile.Source
+} finally {
+    $env:GOTOOLCHAIN = $oldGoToolchain
 }
-
-Write-Host "Initializing gomobile..."
-& $gomobilePath init
-if ($LASTEXITCODE -ne 0) {
-    throw "gomobile init failed with exit code $LASTEXITCODE"
-}
-
-# gomobile init may install a newer gobind than gomobile itself. The 2026-05
-# gobind snapshot no longer exposes golang.org/x/mobile/bind correctly for bind.
-Write-Host "Pinning gobind to the gomobile-compatible x/mobile version..."
-go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20231127183840-76ac6878050a
-if ($LASTEXITCODE -ne 0) {
-    throw "gomobile install failed with exit code $LASTEXITCODE"
-}
-$gomobilePath = (Get-Item (Join-Path (go env GOPATH) "bin\gomobile.exe")).FullName
-go install golang.org/x/mobile/cmd/gobind@v0.0.0-20231127183840-76ac6878050a
-if ($LASTEXITCODE -ne 0) {
-    throw "gobind install failed with exit code $LASTEXITCODE"
-}
+$gomobilePath = Join-Path $toolsDir 'gomobile.exe'
 
 $outputDir = Split-Path -Parent $OutputAar
 New-Item -ItemType Directory -Force $outputDir | Out-Null
@@ -186,11 +219,16 @@ if ($abi -ne "") {
             Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
         }
     } else {
-        Write-Warning "Rime native libraries were not found under $rimeLibDir; AAR will not include librime."
+        throw "Required Rime native libraries were not found under $rimeLibDir."
     }
 }
 
 Write-Host "Built $OutputAar"
 } finally {
+    $env:GOBIN = $oldGoBin
+    $env:PATH = $oldPath
+    if (Test-Path -LiteralPath $toolsDir) {
+        Remove-Item -LiteralPath $toolsDir -Recurse -Force
+    }
     Clear-RimeEmbedData -MoqiImeRoot $MoqiImeRoot
 }
