@@ -27,7 +27,7 @@ class KeyboardView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     enum class Layout {
-        QWERTY_CN, QWERTY_EN, T9_CN, T9_EN, NUMBER, SYMBOL, EMOJI, VOICE
+        QWERTY_CN, QWERTY_EN, T9_CN, T9_EN, NUMBER, SYMBOL, EMOJI, VOICE, T9_STROKE
     }
 
     private val keyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -112,7 +112,7 @@ class KeyboardView @JvmOverloads constructor(
     fun setLayout(layout: Layout) {
         englishTextLayout = when (layout) {
             Layout.QWERTY_EN, Layout.T9_EN -> true
-            Layout.QWERTY_CN, Layout.T9_CN -> false
+            Layout.QWERTY_CN, Layout.T9_CN, Layout.T9_STROKE -> false
             else -> englishTextLayout
         }
         currentLayout = layout
@@ -121,6 +121,7 @@ class KeyboardView @JvmOverloads constructor(
             Layout.QWERTY_EN -> qwertyEnRows()
             Layout.T9_CN -> t9CnRows()
             Layout.T9_EN -> t9EnRows()
+            Layout.T9_STROKE -> t9StrokeRows()
             Layout.NUMBER -> numberRows()
             Layout.SYMBOL -> symbolRows()
             Layout.EMOJI -> emojiRows()
@@ -248,6 +249,7 @@ class KeyboardView @JvmOverloads constructor(
         val lightTextColor = theme.textColor
         labelPaint.color = if (dark) 0xFFE0E0E8.toInt() else lightTextColor
         labelPaint.textSize = when {
+            currentLayout == Layout.T9_STROKE -> keyTextSize(26f, 0.50f)
             isT9Layout() -> keyTextSize(MAIN_LETTER_TEXT_SIZE_SP, 0.42f)
             currentLayout == Layout.NUMBER -> keyTextSize(30f, 0.58f)
             currentLayout == Layout.EMOJI && currentEmojiMode == EmojiMode.KAOMOJI -> keyTextSize(KAOMOJI_TEXT_SIZE_SP, 0.38f)
@@ -366,13 +368,13 @@ class KeyboardView @JvmOverloads constructor(
 
     /** 26 键与 9 键底行「中/英」使用同一套主次字色与字号。 */
     private fun usesStyledModeSwitchKey(): Boolean =
-        isQwertyLayout() || isT9Layout()
+        isQwertyLayout() || isT9Layout() || currentLayout == Layout.T9_STROKE
 
     /** 中文模式：中（左上醒目）+ 英（右下次要）；英文模式：英（左上）+ 中（右下）。参考系统键盘样式。 */
     private fun drawModeSwitchKey(canvas: Canvas, rect: RectF) {
         val dark = isDarkMode
         val chineseActive =
-            currentLayout == Layout.QWERTY_CN || currentLayout == Layout.T9_CN
+            currentLayout == Layout.QWERTY_CN || currentLayout == Layout.T9_CN || currentLayout == Layout.T9_STROKE
         val activePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textAlign = Paint.Align.LEFT
             textSize = keyTextSize(MODE_SWITCH_ACTIVE_TEXT_SP, 0.40f)
@@ -970,9 +972,15 @@ class KeyboardView @JvmOverloads constructor(
         private const val ENTER_ICON_MAX_DP = 40f
     }
 
-    private fun isSpecialKey(key: KeyDefinition): Boolean =
-        (key.keyCode < 0 && !isT9InputKey(key.keyCode) && !isT9PunctuationKey(key.keyCode)) || key.isSticky
+    private fun isSpecialKey(key: KeyDefinition): Boolean = when {
+        key.isSticky -> true
+        key.keyCode >= 0 -> false
+        isT9InputKey(key.keyCode) || isT9PunctuationKey(key.keyCode) -> false
+        key.keyCode in KeyCode.STROKE_ZHE..KeyCode.STROKE_HENG -> false
+        else -> true
+    }
 
+    // The stroke keypad has neither the side panel nor T9 letter long-press popups.
     private fun isT9Layout(): Boolean =
         currentLayout == Layout.T9_CN || currentLayout == Layout.T9_EN
 
@@ -1093,6 +1101,28 @@ class KeyboardView @JvmOverloads constructor(
             KeyDefinition("中/英", KeyCode.MODE_SWITCH, 0.82f),
             KeyDefinition("↵", KeyCode.ENTER, 0.66f)
         )
+    )
+
+    private fun t9StrokeRows(): List<List<KeyDefinition>> = listOf(
+        listOf(
+            KeyDefinition("一", KeyCode.STROKE_HENG),
+            KeyDefinition("丨", KeyCode.STROKE_SHU),
+            KeyDefinition("丿", KeyCode.STROKE_PIE),
+            KeyDefinition("⌫", KeyCode.DELETE, 0.72f, isRepeatable = true)
+        ),
+        listOf(
+            KeyDefinition("丶", KeyCode.STROKE_NA),
+            KeyDefinition("乛", KeyCode.STROKE_ZHE),
+            KeyDefinition("，", KeyCode.COMMA),
+            KeyDefinition("重输", KeyCode.RETYPE, 0.72f)
+        ),
+        listOf(
+            KeyDefinition("。", KeyCode.PERIOD),
+            KeyDefinition("？", '？'.code, commitText = "？"),
+            KeyDefinition("！", '！'.code, commitText = "！"),
+            KeyDefinition("表情", KeyCode.EMOJI_LAYOUT, 0.72f)
+        ),
+        KeyboardBottomRowLayout.strokeRow(context)
     )
 
     private fun t9EnRows(): List<List<KeyDefinition>> = listOf(

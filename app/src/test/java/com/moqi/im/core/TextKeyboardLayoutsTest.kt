@@ -37,6 +37,20 @@ class TextKeyboardLayoutsTest {
         assertTrue(layouts.isT9(true))
     }
 
+    @Test fun strokeIsSeparateFromChinesePinyinAndEnglishT9() {
+        val layouts = TextKeyboardLayouts()
+        layouts.select(true, true)
+        layouts.applySchema(TextKeyboardLayouts.STROKE_SCHEMA_ID)
+        assertTrue(layouts.isChineseStroke)
+        assertFalse(layouts.isT9(false))
+        assertTrue(layouts.isT9(true))
+        layouts.applySchema("")
+        assertTrue(layouts.isChineseStroke)
+        layouts.applySchema("rime_frost_t9")
+        assertFalse(layouts.isChineseStroke)
+        assertTrue(layouts.isT9(false))
+    }
+
     @Test fun selectingChineseLayoutLeavesEnglishUnchanged() {
         val layouts = TextKeyboardLayouts()
         layouts.select(true, true)

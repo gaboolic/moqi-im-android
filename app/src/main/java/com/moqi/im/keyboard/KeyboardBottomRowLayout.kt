@@ -9,6 +9,7 @@ object KeyboardBottomRowLayout {
     private const val PREF_QWERTY_ORDER = "keyboard_bottom_row_qwerty_order"
     private const val PREF_NUMBER_ORDER = "keyboard_bottom_row_number_order"
     private const val PREF_SYMBOL_ORDER = "keyboard_bottom_row_symbol_order"
+    private const val PREF_STROKE_ORDER = "keyboard_bottom_row_stroke_order"
 
     enum class Row(
         val prefKey: String,
@@ -29,6 +30,11 @@ object KeyboardBottomRowLayout {
             PREF_SYMBOL_ORDER,
             "符号键盘",
             listOf(KEY_RETURN, KEY_NUMBER, KEY_SYMBOL_PREV, KEY_SYMBOL_NEXT, KEY_DELETE)
+        ),
+        STROKE(
+            PREF_STROKE_ORDER,
+            "九键笔画",
+            listOf(KEY_SYMBOL, KEY_NUMBER, KEY_SPACE, KEY_MODE, KEY_ENTER)
         )
     }
 
@@ -56,13 +62,9 @@ object KeyboardBottomRowLayout {
     }
 
     fun resetAll(context: Context) {
-        context
-            .getSharedPreferences(ThemePalette.PREFS_NAME, 0)
-            .edit()
-            .remove(PREF_QWERTY_ORDER)
-            .remove(PREF_NUMBER_ORDER)
-            .remove(PREF_SYMBOL_ORDER)
-            .apply()
+        val editor = context.getSharedPreferences(ThemePalette.PREFS_NAME, 0).edit()
+        Row.entries.forEach { editor.remove(it.prefKey) }
+        editor.apply()
     }
 
     fun displayLabel(id: String): String = when (id) {
@@ -92,6 +94,18 @@ object KeyboardBottomRowLayout {
                 KEY_MODE -> KeyDefinition("中/英", KeyCode.MODE_SWITCH, 1f)
                 KEY_ENTER -> KeyDefinition("↵", KeyCode.ENTER, 1f)
                 else -> error("Unsupported QWERTY bottom-row key: $id")
+            }
+        }
+
+    fun strokeRow(context: Context): List<KeyDefinition> =
+        order(context, Row.STROKE).map { id ->
+            when (id) {
+                KEY_SYMBOL -> KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 0.66f)
+                KEY_NUMBER -> KeyDefinition("123", KeyCode.NUMBER_LAYOUT, 0.66f)
+                KEY_SPACE -> KeyDefinition(spaceBarLabel("空格"), KeyCode.SPACE, 2.08f)
+                KEY_MODE -> KeyDefinition("中/英", KeyCode.MODE_SWITCH, 0.82f)
+                KEY_ENTER -> KeyDefinition("↵", KeyCode.ENTER, 0.66f)
+                else -> error("Unsupported stroke bottom-row key: $id")
             }
         }
 

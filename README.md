@@ -35,7 +35,9 @@ Android 端的输入法前端，负责把 [`moqi-ime`](https://github.com/gabool
 
 ### 9 键输入
 
-切换到 9 键方案后，键盘自动变为中文九键布局；左侧侧栏显示可选拼音，候选栏同步展示 Rime 候选。
+在白霜方案集中选择九键拼音方案后，键盘自动变为中文九键布局；左侧侧栏显示可选拼音，候选栏同步展示 Rime 候选。
+
+选择「九宫格笔画」可切换到笔画键盘。按书写顺序点按 `一`（横）、`丨`（竖）、`丿`（撇）、`丶`（点或捺）、`乛`（折或钩），再点候选上屏。例如，`一丨丿丶` 可以输入「木」。
 
 ![9 键输入界面](docs/moqi-t9-keyboard.png)
 
@@ -138,11 +140,7 @@ app/src/main/java/com/moqi/im/
 
 ## 构建
 
-如果修改了 `moqi-ime` 或 mobile bridge，需要先重新生成 AAR：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build-moqi-ime-aar.ps1
-```
+日常 Android 构建使用仓库自带的 AAR。修改 `moqi-ime`、mobile bridge 或 Rime 方案数据时，按 [Android Rime 数据包](docs/rime-data-bundle.md) 的步骤重新生成 AAR。
 
 构建 Android debug APK：
 
