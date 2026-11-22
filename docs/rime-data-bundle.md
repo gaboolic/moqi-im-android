@@ -1,8 +1,8 @@
 # Android Rime 数据包
 
-Android 精简版和完整版都直接使用 [`moqi-ime.aar`](../app/libs/moqi-ime.aar)。Rime 数据由 Go 嵌入 `jni/arm64-v8a/libgojni.so`，不走 APK 的 `assets/`。引擎初始化时会按 `.moqi_embed_version` 把共享数据更新到应用私有目录；Rime 根据配置修改时间重新部署。构建只追加共享 `default.yaml` 的方案列表，不修改用户方案列表、已选方案或用户词典。自定义配置若完整替换了 `schema_list`，需自行将 `frost_stroke` 加入其列表。
+Android 精简版和完整版都直接使用 [`moqi-ime.aar`](../app/libs/moqi-ime.aar)。Rime 数据由 Go 嵌入 `jni/arm64-v8a/libgojni.so`，不走 APK 的 `assets/`。引擎初始化时会按 `.moqi_embed_version` 把共享数据更新到应用私有目录；Rime 根据配置修改时间重新部署。构建只追加共享 `default.yaml` 的方案列表，不修改用户方案列表、已选方案或用户词典。自定义配置若完整替换了 `schema_list`，需自行将 `rime_frost_stroke_t9` 加入其列表。
 
-[`frost_stroke.schema.yaml`](../app/rime-data/frost_stroke.schema.yaml) 是 Android 构建的方案输入，与白霜提交 `5613ab05a842fa5edb3e56a478a6e7d19b85cae2` 的同名文件逐字节一致。它复用 [固定版本的白霜字典](https://github.com/gaboolic/rime-frost/blob/6b74e54da2737d9b9ba8c502ce697145f94504ba/stroke.dict.yaml)和同一版本的 `essay.txt`、`default.yaml`，不另存一份字典。`stroke.dict.yaml` 的原始头部保留了 CNS11643 和北大中文论坛的来源说明；见 [Rime 笔画项目及许可](https://github.com/rime/rime-stroke)。
+[`rime_frost_stroke_t9.schema.yaml`](../app/rime-data/rime_frost_stroke_t9.schema.yaml) 是 Android 构建的方案输入，与白霜提交 `f8a728e6491375c0a90d63260bf75694ac549e38` 的同名文件逐字节一致。它复用 [固定版本的白霜字典](https://github.com/gaboolic/rime-frost/blob/6b74e54da2737d9b9ba8c502ce697145f94504ba/stroke.dict.yaml)和同一版本的 `essay.txt`、`default.yaml`，不另存一份字典。`stroke.dict.yaml` 的原始头部保留了 CNS11643 和北大中文论坛的来源说明；见 [Rime 笔画项目及许可](https://github.com/rime/rime-stroke)。
 
 ## 重建随应用发布的 AAR
 
@@ -26,4 +26,4 @@ $env:ANDROID_NDK_HOME = Join-Path $env:ANDROID_HOME 'ndk\26.1.10909125'
 
 后端的 Git 子模块固定为 `6b74e54da2737d9b9ba8c502ce697145f94504ba`。`-UsePrebuiltLibrime` 采用后端提交自带的 `librime.so` 和 `libc++_shared.so`，只重建 Go 桥和其中嵌入的数据（Android API 24，arm64-v8a）。脚本仅操作后端的临时 `input_methods/rime/data` 目录，并拒绝覆盖该目录中的已有文件。
 
-随应用发布的 AAR SHA-256：`02e8d079cc3dbb2b26e0aa8aeb7ec47a9532438b1e7f7cf5d300c9c59c418726`。嵌入数据标记：`0cedaac6490e2aec76dc7f18c03128d78c5dfb4e377150140682d3aea1cb7867`。重建的 ZIP 时间戳以及 Go 工具链记录的本机检出路径可不同，AAR 整包哈希不作为跨机器重建校验。
+随应用发布的 AAR SHA-256：`3ff8e020324ee373755979609bfd2e056651f6241ddea1521c64c629e82f479e`。嵌入数据标记：`a9dc69d0a23e2a1c5147d03c64cfcb7d58115924230f99cd7e335a81d02191f6`。重建的 ZIP 时间戳以及 Go 工具链记录的本机检出路径可不同，AAR 整包哈希不作为跨机器重建校验。

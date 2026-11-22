@@ -26,7 +26,7 @@ function Add-FrostStrokeSchema {
         }
     }
 
-    $schemaName = "frost_stroke.schema.yaml"
+    $schemaName = "rime_frost_stroke_t9.schema.yaml"
     $schemaSource = Join-Path $PSScriptRoot "..\app\rime-data\$schemaName"
     Copy-Item -LiteralPath $schemaSource -Destination (Join-Path $TargetDir $schemaName) -Force
 
@@ -39,13 +39,13 @@ function Add-FrostStrokeSchema {
         throw "Expected a block schema_list in the pinned Rime Frost default.yaml."
     }
     foreach ($item in $items) {
-        if ($item.Groups['id'].Value -eq 'frost_stroke') {
+        if ($item.Groups['id'].Value -eq 'rime_frost_stroke_t9') {
             return
         }
     }
     $last = $items[$items.Count - 1]
     $end = $schemaList.Groups['items'].Index + $last.Index + $last.Length
-    $entry = $schemaList.Groups['eol'].Value + $last.Groups['indent'].Value + '- schema: frost_stroke'
+    $entry = $schemaList.Groups['eol'].Value + $last.Groups['indent'].Value + '- schema: rime_frost_stroke_t9'
     [System.IO.File]::WriteAllText($defaultPath, $default.Insert($end, $entry))
 }
 

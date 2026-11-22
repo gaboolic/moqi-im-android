@@ -22,6 +22,7 @@ internal class TextKeyboardLayouts {
     fun applySchema(schemaId: String) {
         if (schemaId.isBlank()) return
         chineseLayout = when {
+            // Stroke also ends in _t9; match it before the generic pinyin rule.
             schemaId == STROKE_SCHEMA_ID -> ChineseLayout.T9_STROKE
             schemaId.contains("_t9", ignoreCase = true) -> ChineseLayout.T9_PINYIN
             else -> ChineseLayout.QWERTY
@@ -29,6 +30,6 @@ internal class TextKeyboardLayouts {
     }
 
     companion object {
-        const val STROKE_SCHEMA_ID = "frost_stroke"
+        const val STROKE_SCHEMA_ID = "rime_frost_stroke_t9"
     }
 }

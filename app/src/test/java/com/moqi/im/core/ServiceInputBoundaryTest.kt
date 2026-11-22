@@ -99,7 +99,7 @@ class ServiceInputBoundaryTest {
             stroke('p') // Unhandled by the engine: no pinyin retry and no literal commit.
             worker.drain()
             shadowOf(Looper.getMainLooper()).idle()
-            assertEquals(listOf("key:h:frost_stroke", "backspace", "unhandled:p"), session.calls)
+            assertEquals(listOf("key:h:rime_frost_stroke_t9", "backspace", "unhandled:p"), session.calls)
             assertEquals("原", connection.editable.toString())
             assertEquals("", ReflectionHelpers.getField<StringBuilder>(service, "composingText").toString())
             invoke(service, "handleBackspace") // Empty Rime state falls back to editor deletion.
