@@ -27,7 +27,7 @@ class KeyboardView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     enum class Layout {
-        QWERTY_CN, QWERTY_EN, T9_CN, T9_EN, NUMBER, SYMBOL, EMOJI, VOICE, T9_STROKE
+        QWERTY_CN, QWERTY_EN, T9_CN, T9_EN, NUMBER, SYMBOL, EMOJI, VOICE, T9_STROKE, P14_CN
     }
 
     private val keyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -112,7 +112,7 @@ class KeyboardView @JvmOverloads constructor(
     fun setLayout(layout: Layout) {
         englishTextLayout = when (layout) {
             Layout.QWERTY_EN, Layout.T9_EN -> true
-            Layout.QWERTY_CN, Layout.T9_CN, Layout.T9_STROKE -> false
+            Layout.QWERTY_CN, Layout.T9_CN, Layout.T9_STROKE, Layout.P14_CN -> false
             else -> englishTextLayout
         }
         currentLayout = layout
@@ -126,6 +126,7 @@ class KeyboardView @JvmOverloads constructor(
             Layout.T9_CN -> t9CnRows()
             Layout.T9_EN -> t9EnRows()
             Layout.T9_STROKE -> t9StrokeRows()
+            Layout.P14_CN -> p14CnRows()
             Layout.NUMBER -> numberRows()
             Layout.SYMBOL -> symbolRows()
             Layout.EMOJI -> emojiRows()
@@ -329,7 +330,7 @@ class KeyboardView @JvmOverloads constructor(
             drawModeSwitchKey(canvas, rect)
             return
         }
-        if (key.keyCode == KeyCode.ENTER) {
+        if (key.keyCode == KeyCode.ENTER && currentLayout != Layout.P14_CN) {
             drawEnterKey(canvas, rect)
             return
         }
@@ -346,19 +347,29 @@ class KeyboardView @JvmOverloads constructor(
             }
         }
 
-        val textBaseline = if (key.swipeText.isNullOrBlank() || isSpecialKey(key)) {
-            rect.centerY() - (textPaint.descent() + textPaint.ascent()) / 2f
+        val centeredBaseline = rect.centerY() - (textPaint.descent() + textPaint.ascent()) / 2f
+        val p14TopLabel = currentLayout == Layout.P14_CN && key.subLabel != null
+        val textBaseline = if (p14TopLabel) {
+            centeredBaseline + rect.height() * 0.08f
+        } else if (key.swipeText.isNullOrBlank() || isSpecialKey(key)) {
+            centeredBaseline
         } else {
             val extraUp = if (usesLetterDigitDualLineSpacing()) dp(QWERTY_DUAL_LINE_PRIMARY_UP_DP) else 0f
-            rect.centerY() - (textPaint.descent() + textPaint.ascent()) / 2f - rect.height() * 0.08f - dp(1f) - extraUp
+            centeredBaseline - rect.height() * 0.08f - dp(1f) - extraUp
         }
         canvas.drawText(text, rect.centerX(), textBaseline, textPaint)
 
         val subLabel = key.subLabel
         if (subLabel != null && !isSpecialKey(key)) {
-            subLabelPaint.color = if (dark) 0xFF9090AA.toInt() else ThemePalette.current(context).textColor
+            val themeText = ThemePalette.current(context).textColor
+            subLabelPaint.color = when {
+                dark -> 0xFF9090AA.toInt()
+                p14TopLabel -> (themeText and 0x00FFFFFF) or 0x66000000
+                else -> themeText
+            }
             val subBottomInsetDp = if (usesLetterDigitDualLineSpacing()) QWERTY_DUAL_LINE_SUB_BOTTOM_INSET_DP else 7f
-            val subBaseline = rect.bottom - dp(subBottomInsetDp)
+            val subBaseline = if (p14TopLabel) rect.top + rect.height() * 0.10f - subLabelPaint.ascent()
+            else rect.bottom - dp(subBottomInsetDp)
             canvas.drawText(subLabel, rect.centerX(), subBaseline, subLabelPaint)
         }
     }
@@ -370,15 +381,14 @@ class KeyboardView @JvmOverloads constructor(
     private fun usesLetterDigitDualLineSpacing(): Boolean =
         isQwertyLayout() || isT9Layout()
 
-    /** 26 键与 9 键底行「中/英」使用同一套主次字色与字号。 */
+    /** 文本键盘底行「中/英」使用同一套主次字色与字号。 */
     private fun usesStyledModeSwitchKey(): Boolean =
-        isQwertyLayout() || isT9Layout() || currentLayout == Layout.T9_STROKE
+        isQwertyLayout() || isT9Layout() || currentLayout == Layout.T9_STROKE || currentLayout == Layout.P14_CN
 
     /** 中文模式：中（左上醒目）+ 英（右下次要）；英文模式：英（左上）+ 中（右下）。参考系统键盘样式。 */
     private fun drawModeSwitchKey(canvas: Canvas, rect: RectF) {
         val dark = isDarkMode
-        val chineseActive =
-            currentLayout == Layout.QWERTY_CN || currentLayout == Layout.T9_CN || currentLayout == Layout.T9_STROKE
+        val chineseActive = !englishTextLayout
         val activePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textAlign = Paint.Align.LEFT
             textSize = keyTextSize(MODE_SWITCH_ACTIVE_TEXT_SP, 0.40f)
@@ -892,7 +902,11 @@ class KeyboardView @JvmOverloads constructor(
     private fun dispatchSwipeKey(keyPos: Pair<Int, Int>) {
         val key = keyAt(keyPos) ?: return
         val swipeText = key.swipeText ?: return
-        onKeyListener?.invoke(key.keyCode, shiftState != ShiftState.LOWER, swipeText)
+        if (currentLayout == Layout.P14_CN && key.keyCode == KeyCode.COMMA && swipeText == "'") {
+            onKeyListener?.invoke(KeyCode.P14_SEPARATOR, false, null)
+        } else {
+            onKeyListener?.invoke(key.keyCode, shiftState != ShiftState.LOWER, swipeText)
+        }
     }
 
     private fun keyAt(keyPos: Pair<Int, Int>): KeyDefinition? {
@@ -982,7 +996,10 @@ class KeyboardView @JvmOverloads constructor(
         key.isSticky -> true
         key.keyCode >= 0 -> false
         isT9InputKey(key.keyCode) || isT9PunctuationKey(key.keyCode) -> false
+        currentLayout == Layout.P14_CN &&
+            (key.keyCode == KeyCode.COMMA || key.keyCode == KeyCode.PERIOD || key.keyCode == KeyCode.SPACE) -> false
         key.keyCode in KeyCode.STROKE_SEPARATOR..KeyCode.STROKE_HENG -> false
+        key.keyCode in KeyCode.P14_M..KeyCode.P14_QW -> false
         else -> true
     }
 
@@ -1077,6 +1094,43 @@ class KeyboardView @JvmOverloads constructor(
         rowOfWithExtras("zxcvbnm", listOf("`", "+", "-", "?", ":", ";", "/")),
         bottomRowEn()
     )
+
+    private fun p14CnRows(): List<List<KeyDefinition>> = listOf(
+        listOf(
+            p14Key("QW", KeyCode.P14_QW, "1"),
+            p14Key("ER", KeyCode.P14_ER, "2"),
+            p14Key("TY", KeyCode.P14_TY, "3"),
+            p14Key("UI", KeyCode.P14_UI, "4"),
+            p14Key("OP", KeyCode.P14_OP, "5")
+        ),
+        listOf(
+            p14Key("AS", KeyCode.P14_AS, "6"),
+            p14Key("DF", KeyCode.P14_DF, "7"),
+            p14Key("GH", KeyCode.P14_GH, "8"),
+            p14Key("JK", KeyCode.P14_JK, "9"),
+            p14Key("L", KeyCode.P14_L, "0")
+        ),
+        listOf(
+            KeyDefinition("⇧", KeyCode.SHIFT, 0.78f, isSticky = true),
+            p14Key("ZX", KeyCode.P14_ZX, "~"),
+            p14Key("CV", KeyCode.P14_CV, "!"),
+            p14Key("BN", KeyCode.P14_BN, "@"),
+            p14Key("M", KeyCode.P14_M, "?", 0.66f),
+            KeyDefinition("⌫", KeyCode.DELETE, 0.78f, isRepeatable = true)
+        ),
+        listOf(
+            KeyDefinition("符", KeyCode.SYMBOL_LAYOUT, 0.78f),
+            KeyDefinition("123", KeyCode.NUMBER_LAYOUT, 0.62f),
+            KeyDefinition("，", KeyCode.COMMA, 0.46f, subLabel = "'", swipeText = "'"),
+            KeyDefinition(if (BuildConfig.VOICE_INPUT_ENABLED) "🎤" else "空格", KeyCode.SPACE, 1.42f),
+            KeyDefinition("。", KeyCode.PERIOD, 0.46f),
+            KeyDefinition("中/英", KeyCode.MODE_SWITCH, 0.62f),
+            KeyDefinition("换行", KeyCode.ENTER, 0.78f)
+        )
+    )
+
+    private fun p14Key(label: String, code: Int, alternate: String, width: Float = 1f): KeyDefinition =
+        KeyDefinition(label, code, width, subLabel = alternate, swipeText = alternate)
 
     private fun t9CnRows(): List<List<KeyDefinition>> = listOf(
         listOf(

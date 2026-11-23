@@ -53,4 +53,21 @@ object KeyCode {
     const val STROKE_ZHE = -705
     const val STROKE_WILDCARD = -706
     const val STROKE_SEPARATOR = -707
+
+    // Fourteen-key pinyin emits a group event, not either of its literal letters.
+    const val P14_QW = -801
+    const val P14_ER = -802
+    const val P14_TY = -803
+    const val P14_UI = -804
+    const val P14_OP = -805
+    const val P14_AS = -806
+    const val P14_DF = -807
+    const val P14_GH = -808
+    const val P14_JK = -809
+    const val P14_L = -810
+    const val P14_ZX = -811
+    const val P14_CV = -812
+    const val P14_BN = -813
+    const val P14_M = -814
+    const val P14_SEPARATOR = -815
 }

@@ -2,7 +2,7 @@
 
 精简版和完整版都使用 [`moqi-ime.aar`](../app/libs/moqi-ime.aar)。Rime 数据由 Go 嵌入 `jni/arm64-v8a/libgojni.so`。引擎初始化时按 `.moqi_embed_version` 更新共享数据，Rime 再根据配置修改时间重新部署。不覆盖用户自定义配置或词典；若自定义配置完整替换了 `schema_list`，需自行加入 `rime_frost_stroke_t9`。
 
-Android 直接使用 [白霜上游提交 `2c08e25`](https://github.com/gaboolic/rime-frost/commit/2c08e2521b356bd013c4bd287f2ff028e9df4345) 生成的发布 ZIP（包含 [rime-frost #427](https://github.com/gaboolic/rime-frost/pull/427)）。Android 仓库不再维护单独的笔画方案；配置、Lua 模块和词典都来自同一个上游 ZIP。
+Android 直接使用白霜的发布打包脚本生成 ZIP。当前数据包取自 [白霜十四键 PR #432](https://github.com/gaboolic/rime-frost/pull/432) 的提交 `2e52d7705a24034c5cb7b62e81316f55e88f8ae9`。配置、Lua 模块和词典都来自同一个 ZIP，不在 Android 仓库另存一份。
 
 ## 重建随应用发布的 AAR
 
@@ -15,7 +15,8 @@ $frost = '..\rime-frost-android-data'
 $backend = '..\moqi-ime-android-bundle'
 $librime = '..\librime-android-headers'
 git clone -c core.autocrlf=false https://github.com/gaboolic/rime-frost.git $frost
-git -C $frost checkout --detach 2c08e2521b356bd013c4bd287f2ff028e9df4345
+git -C $frost fetch origin refs/pull/432/head
+git -C $frost checkout --detach 2e52d7705a24034c5cb7b62e81316f55e88f8ae9
 Push-Location $frost
 try {
     python others/program/release/generate_rime_all_schema_zip.py
@@ -33,4 +34,4 @@ $env:ANDROID_NDK_HOME = Join-Path $env:ANDROID_HOME 'ndk\26.1.10909125'
 
 `-UsePrebuiltLibrime` 继续使用后端提交自带的 `librime.so` 和 `libc++_shared.so`，只重建 Go 桥和嵌入数据（Android API 24，arm64-v8a）。脚本仅向后端临时 `input_methods/rime/data` 目录解包，拒绝覆盖其中的已有文件；无需初始化后端的白霜数据子模块。
 
-本次嵌入数据标记：`a5ae518a88e880c73a01031dc893c1569a711826859934adfdf664447f1bdd2b`。随应用提交的 AAR SHA-256：`00599533d021f5365551881d99b6479fd8ce7491249e24eb4961598d44c4d218`。ZIP/AAR 的归档时间戳可能不同，跨机器重建以嵌入数据标记校验内容。
+本次嵌入数据标记：`b735ec1df22efe93357cb54c7bf2c5412b6e1b551e67119122f78adfe2fb3fae`。当前 AAR SHA-256：`cc5d7814cb321dc7c1adc843a548b5b877e1d2cf965278fadf16bee700c8f2ee`。ZIP/AAR 的归档时间戳可能不同，跨机器重建以嵌入数据标记校验内容。
