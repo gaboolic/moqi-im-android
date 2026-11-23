@@ -1,29 +1,36 @@
 # Android Rime 数据包
 
-Android 精简版和完整版都直接使用 [`moqi-ime.aar`](../app/libs/moqi-ime.aar)。Rime 数据由 Go 嵌入 `jni/arm64-v8a/libgojni.so`，不走 APK 的 `assets/`。引擎初始化时会按 `.moqi_embed_version` 把共享数据更新到应用私有目录；Rime 根据配置修改时间重新部署。构建只追加共享 `default.yaml` 的方案列表，不修改用户方案列表、已选方案或用户词典。自定义配置若完整替换了 `schema_list`，需自行将 `rime_frost_stroke_t9` 加入其列表。
+精简版和完整版都使用 [`moqi-ime.aar`](../app/libs/moqi-ime.aar)。Rime 数据由 Go 嵌入 `jni/arm64-v8a/libgojni.so`。引擎初始化时按 `.moqi_embed_version` 更新共享数据，Rime 再根据配置修改时间重新部署。不覆盖用户自定义配置或词典；若自定义配置完整替换了 `schema_list`，需自行加入 `rime_frost_stroke_t9`。
 
-[`rime_frost_stroke_t9.schema.yaml`](../app/rime-data/rime_frost_stroke_t9.schema.yaml) 是 Android 构建的方案输入，与白霜提交 `f8a728e6491375c0a90d63260bf75694ac549e38` 的同名文件逐字节一致。它复用 [固定版本的白霜字典](https://github.com/gaboolic/rime-frost/blob/6b74e54da2737d9b9ba8c502ce697145f94504ba/stroke.dict.yaml)和同一版本的 `essay.txt`、`default.yaml`，不另存一份字典。`stroke.dict.yaml` 的原始头部保留了 CNS11643 和北大中文论坛的来源说明；见 [Rime 笔画项目及许可](https://github.com/rime/rime-stroke)。
+Android 直接使用 [白霜上游提交 `2c08e25`](https://github.com/gaboolic/rime-frost/commit/2c08e2521b356bd013c4bd287f2ff028e9df4345) 生成的发布 ZIP（包含 [rime-frost #427](https://github.com/gaboolic/rime-frost/pull/427)）。Android 仓库不再维护单独的笔画方案；配置、Lua 模块和词典都来自同一个上游 ZIP。
 
 ## 重建随应用发布的 AAR
 
-需要 Go 1.26.4、JDK 与 Android SDK/NDK 26.1.10909125。脚本在临时目录通过 Go 1.24.6 构建兼容的 `gomobile` 和 `gobind`（`golang.org/x/mobile` 版本 `v0.0.0-20231127183840-76ac6878050a`），不会覆盖全局工具。
+需要 Python 3、Go 1.26.4、JDK 与 Android SDK/NDK 26.1.10909125。脚本在临时目录以 Go 1.24.6 构建兼容的 `gomobile` 和 `gobind`（`golang.org/x/mobile` 版本 `v0.0.0-20231127183840-76ac6878050a`），不会覆盖全局工具。
 
-从 Android 仓库根目录运行，另建一个可以丢弃的后端检出目录：
+从 Android 仓库根目录运行，使用可以丢弃的后端检出目录：
 
 ```powershell
+$frost = '..\rime-frost-android-data'
 $backend = '..\moqi-ime-android-bundle'
 $librime = '..\librime-android-headers'
+git clone -c core.autocrlf=false https://github.com/gaboolic/rime-frost.git $frost
+git -C $frost checkout --detach 2c08e2521b356bd013c4bd287f2ff028e9df4345
+Push-Location $frost
+try {
+    python others/program/release/generate_rime_all_schema_zip.py
+    if ($LASTEXITCODE -ne 0) { throw '白霜打包失败' }
+} finally { Pop-Location }
 git clone -c core.autocrlf=false https://github.com/gaboolic/moqi-ime.git $backend
 git -C $backend checkout --detach 9b1dbdf92cc9253ea7c9351509fc35a14455f9ef
 git clone https://github.com/gaboolic/librime.git $librime
 git -C $librime checkout --detach a49a57f7142c39021e4290d1a63c16e69649290d
 $env:CGO_CFLAGS = '"-I' + (Resolve-Path "$librime\src").Path.Replace('\', '/') + '"'
-git -C $backend -c core.autocrlf=false submodule update --init rime-frost
 git -C $backend apply (Join-Path $PWD 'patches/moqi-ime-real-candidate-page-change.patch')
 $env:ANDROID_NDK_HOME = Join-Path $env:ANDROID_HOME 'ndk\26.1.10909125'
-.\scripts\build-moqi-ime-aar.ps1 -MoqiImeRoot $backend -UsePrebuiltLibrime
+.\scripts\build-moqi-ime-aar.ps1 -MoqiImeRoot $backend -RimeFrostZip "$frost\rime-frost-schemas.zip" -UsePrebuiltLibrime
 ```
 
-后端的 Git 子模块固定为 `6b74e54da2737d9b9ba8c502ce697145f94504ba`。`-UsePrebuiltLibrime` 采用后端提交自带的 `librime.so` 和 `libc++_shared.so`，只重建 Go 桥和其中嵌入的数据（Android API 24，arm64-v8a）。脚本仅操作后端的临时 `input_methods/rime/data` 目录，并拒绝覆盖该目录中的已有文件。
+`-UsePrebuiltLibrime` 继续使用后端提交自带的 `librime.so` 和 `libc++_shared.so`，只重建 Go 桥和嵌入数据（Android API 24，arm64-v8a）。脚本仅向后端临时 `input_methods/rime/data` 目录解包，拒绝覆盖其中的已有文件；无需初始化后端的白霜数据子模块。
 
-随应用发布的 AAR SHA-256：`3ff8e020324ee373755979609bfd2e056651f6241ddea1521c64c629e82f479e`。嵌入数据标记：`a9dc69d0a23e2a1c5147d03c64cfcb7d58115924230f99cd7e335a81d02191f6`。重建的 ZIP 时间戳以及 Go 工具链记录的本机检出路径可不同，AAR 整包哈希不作为跨机器重建校验。
+本次嵌入数据标记：`a5ae518a88e880c73a01031dc893c1569a711826859934adfdf664447f1bdd2b`。随应用提交的 AAR SHA-256：`00599533d021f5365551881d99b6479fd8ce7491249e24eb4961598d44c4d218`。ZIP/AAR 的归档时间戳可能不同，跨机器重建以嵌入数据标记校验内容。

@@ -507,6 +507,8 @@ class MoqiInputMethodService : InputMethodService() {
             KeyCode.STROKE_PIE -> handleStroke('p')
             KeyCode.STROKE_NA -> handleStroke('n')
             KeyCode.STROKE_ZHE -> handleStroke('z')
+            KeyCode.STROKE_WILDCARD -> handleStroke('x')
+            KeyCode.STROKE_SEPARATOR -> handleStroke('\'')
             in KeyCode.T9_POUND..KeyCode.T9_1 -> handleT9Key(keyCode)
             else -> {
                 val mapped = MoqiImeKeyMapper.fromAndroidKeyCode(keyCode, isShifted || shiftActive)
@@ -525,7 +527,7 @@ class MoqiInputMethodService : InputMethodService() {
         val input = SymbolInputPolicy.resolve(
             text = text,
             english = currentMode == InputMode.ENGLISH,
-            literalPanel = literalPanel || (isT9Mode && text.length == 1 && text[0].isDigit()),
+            literalPanel = literalPanel || ((isT9Mode || isStrokeMode) && text.length == 1 && text[0].isDigit()),
             t9Composing = isT9Mode && currentMode == InputMode.PINYIN && t9PinyinDigits.isNotEmpty(),
             // The worker must check its ordered state, not a potentially stale UI composition snapshot.
             composing = currentMode != InputMode.ENGLISH
@@ -585,8 +587,12 @@ class MoqiInputMethodService : InputMethodService() {
 
     private fun handleStroke(stroke: Char) {
         if (!isStrokeMode) return
-        val (keyCode, charCode) = MoqiImeKeyMapper.printable(stroke)
-        // A stroke is a Rime code, not a letter to commit or retry in a pinyin schema.
+        val (keyCode, charCode) = if (stroke == '\'') {
+            MoqiImeKeyMapper.symbol(stroke)
+        } else {
+            MoqiImeKeyMapper.printable(stroke)
+        }
+        // A stroke key is a Rime code, not text to commit or retry in a pinyin schema.
         submitMoqiKey(keyCode, charCode)
     }
 

@@ -116,6 +116,10 @@ class KeyboardView @JvmOverloads constructor(
             else -> englishTextLayout
         }
         currentLayout = layout
+        if (layout == Layout.T9_STROKE) {
+            sidePanelScroller.forceFinished(true)
+            t9SidePanelScrollOffset = 0f
+        }
         rows = when (layout) {
             Layout.QWERTY_CN -> qwertyCnRows()
             Layout.QWERTY_EN -> qwertyEnRows()
@@ -205,7 +209,7 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     private fun drawT9SidePanel(canvas: Canvas) {
-        if (!isT9Layout() || t9SidePanelRect.isEmpty) return
+        if (!hasT9SidePanel() || t9SidePanelRect.isEmpty) return
         val dark = isDarkMode
         val items = t9SideItems()
         val cornerRadius = dp(8f)
@@ -752,7 +756,9 @@ class KeyboardView @JvmOverloads constructor(
         return (t9SideItems().size * itemHeight - t9SidePanelRect.height()).coerceAtLeast(0f)
     }
 
-    private fun isT9SidePanelCell(row: Int, col: Int): Boolean = isT9Layout() && col == 0 && row in 0..2
+    private fun hasT9SidePanel(): Boolean = isT9Layout() || currentLayout == Layout.T9_STROKE
+
+    private fun isT9SidePanelCell(row: Int, col: Int): Boolean = hasT9SidePanel() && col == 0 && row in 0..2
 
     private fun clearTouchTracking() {
         touchStartKey = null
@@ -895,7 +901,7 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     private fun findKeyAt(x: Float, y: Float): Pair<Int, Int>? {
-        if (isT9Layout() && t9SidePanelRect.contains(x, y)) {
+        if (hasT9SidePanel() && t9SidePanelRect.contains(x, y)) {
             return Pair(0, 0)
         }
         for ((rowIdx, row) in keyRects.withIndex()) {
@@ -921,7 +927,7 @@ class KeyboardView @JvmOverloads constructor(
                 rect
             }
         }
-        t9SidePanelRect = if (isT9Layout() && keyRects.size >= 3 && keyRects[0].isNotEmpty()) {
+        t9SidePanelRect = if (hasT9SidePanel() && keyRects.size >= 3 && keyRects[0].isNotEmpty()) {
             RectF(
                 keyRects[0][0].left,
                 keyRects[0][0].top,
@@ -976,11 +982,11 @@ class KeyboardView @JvmOverloads constructor(
         key.isSticky -> true
         key.keyCode >= 0 -> false
         isT9InputKey(key.keyCode) || isT9PunctuationKey(key.keyCode) -> false
-        key.keyCode in KeyCode.STROKE_ZHE..KeyCode.STROKE_HENG -> false
+        key.keyCode in KeyCode.STROKE_SEPARATOR..KeyCode.STROKE_HENG -> false
         else -> true
     }
 
-    // The stroke keypad has neither the side panel nor T9 letter long-press popups.
+    // Only pinyin/English nine-key uses dynamic side options and letter popups.
     private fun isT9Layout(): Boolean =
         currentLayout == Layout.T9_CN || currentLayout == Layout.T9_EN
 
@@ -1103,27 +1109,38 @@ class KeyboardView @JvmOverloads constructor(
         )
     )
 
-    private fun t9StrokeRows(): List<List<KeyDefinition>> = listOf(
-        listOf(
-            KeyDefinition("一", KeyCode.STROKE_HENG),
-            KeyDefinition("丨", KeyCode.STROKE_SHU),
-            KeyDefinition("丿", KeyCode.STROKE_PIE),
-            KeyDefinition("⌫", KeyCode.DELETE, 0.72f, isRepeatable = true)
-        ),
-        listOf(
-            KeyDefinition("丶", KeyCode.STROKE_NA),
-            KeyDefinition("乛", KeyCode.STROKE_ZHE),
-            KeyDefinition("，", KeyCode.COMMA),
-            KeyDefinition("重输", KeyCode.RETYPE, 0.72f)
-        ),
-        listOf(
-            KeyDefinition("。", KeyCode.PERIOD),
-            KeyDefinition("？", '？'.code, commitText = "？"),
-            KeyDefinition("！", '！'.code, commitText = "！"),
-            KeyDefinition("表情", KeyCode.EMOJI_LAYOUT, 0.72f)
-        ),
-        KeyboardBottomRowLayout.strokeRow(context)
-    )
+    private fun t9StrokeRows(): List<List<KeyDefinition>> {
+        // Reserve the first column for the same continuous panel used by nine-key pinyin.
+        val side = KeyDefinition("", KeyCode.NO_OP, 0.72f)
+        return listOf(
+            listOf(
+                side,
+                t9Key("一", KeyCode.STROKE_HENG, "1"),
+                t9Key("丨", KeyCode.STROKE_SHU, "2"),
+                t9Key("丿", KeyCode.STROKE_PIE, "3"),
+                KeyDefinition("⌫", KeyCode.DELETE, 0.72f, isRepeatable = true)
+            ),
+            listOf(
+                side,
+                t9Key("丶", KeyCode.STROKE_NA, "4"),
+                t9Key("𠃋", KeyCode.STROKE_ZHE, "5"),
+                t9Key("通配", KeyCode.STROKE_WILDCARD, "6"),
+                KeyDefinition("重输", KeyCode.RETYPE, 0.72f)
+            ),
+            listOf(
+                side,
+                t9Key("分词", KeyCode.STROKE_SEPARATOR, "7"),
+                strokeSymbolKey('：', "8"),
+                strokeSymbolKey('；', "9"),
+                KeyDefinition("0", '0'.code, 0.72f, commitText = "0")
+            ),
+            KeyboardBottomRowLayout.strokeRow(context)
+        )
+    }
+
+    private fun strokeSymbolKey(symbol: Char, digit: String? = null, widthFactor: Float = 1f): KeyDefinition =
+        KeyDefinition(symbol.toString(), symbol.code, widthFactor, subLabel = digit, swipeText = digit,
+            commitText = symbol.toString())
 
     private fun t9EnRows(): List<List<KeyDefinition>> = listOf(
         listOf(
@@ -1168,6 +1185,9 @@ class KeyboardView @JvmOverloads constructor(
             }
 
     private fun t9SideItems(): List<KeyDefinition> {
+        if (currentLayout == Layout.T9_STROKE) {
+            return listOf('，', '。', '？', '！').map { strokeSymbolKey(it, widthFactor = 0.72f) }
+        }
         if (t9PinyinOptions.isNotEmpty()) {
             return t9PinyinOptions.map { option ->
                 KeyDefinition(option, KeyCode.T9_PINYIN_OPTION, 0.72f, commitText = option)
@@ -1182,7 +1202,7 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     private fun t9SideItemAt(y: Float): KeyDefinition? {
-        if (!isT9Layout() || !t9SidePanelRect.contains(t9SidePanelRect.centerX(), y)) return null
+        if (!hasT9SidePanel() || !t9SidePanelRect.contains(t9SidePanelRect.centerX(), y)) return null
         val itemHeight = t9SidePanelRect.height() / T9_VISIBLE_SIDE_ITEMS
         val index = ((y - t9SidePanelRect.top + t9SidePanelScrollOffset) / itemHeight).toInt()
         return t9SideItems().getOrNull(index)

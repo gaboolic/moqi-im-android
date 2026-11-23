@@ -4,6 +4,7 @@ import android.os.Looper
 import android.view.View
 import android.view.inputmethod.BaseInputConnection
 import com.moqi.im.engine.*
+import com.moqi.im.keyboard.KeyCode
 import com.moqi.im.keyboard.KeyboardInputQueue
 import org.junit.Assert.*
 import org.junit.Test
@@ -105,6 +106,34 @@ class ServiceInputBoundaryTest {
             invoke(service, "handleBackspace") // Empty Rime state falls back to editor deletion.
             worker.drain()
             shadowOf(Looper.getMainLooper()).idle()
+            assertEquals("", connection.editable.toString())
+        }
+    }
+
+    @Test fun strokeWildcardAndSeparatorAreRimeCodes() {
+        val session = object : FakeEngineSession(TextKeyboardLayouts.STROKE_SCHEMA_ID) {
+            override fun keyDown(keyCode: Int, charCode: Int): MoqiImeResult {
+                calls += "$keyCode/$charCode"
+                return engineResult(handled = false)
+            }
+        }
+        withService(session) { service, worker, connection ->
+            service.getSharedPreferences("moqi_im_prefs", 0).edit()
+                .putBoolean("key_sound", false).putBoolean("key_vibrate", false).apply()
+            fun key(code: Int) = ReflectionHelpers.callInstanceMethod<Unit>(service, "handleKey",
+                ReflectionHelpers.ClassParameter.from(Int::class.javaPrimitiveType!!, code),
+                ReflectionHelpers.ClassParameter.from(Boolean::class.javaPrimitiveType!!, false))
+            fun schema(id: String) = ReflectionHelpers.callInstanceMethod<Unit>(service, "applySchemaLayout",
+                ReflectionHelpers.ClassParameter.from(String::class.java, id))
+            schema(session.schema)
+            key(KeyCode.STROKE_WILDCARD)
+            key(KeyCode.STROKE_SEPARATOR)
+            schema("rime_frost_t9")
+            key(KeyCode.STROKE_WILDCARD)
+            key(KeyCode.STROKE_SEPARATOR)
+            worker.drain()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(listOf("${'x'.code}/${'x'.code}", "0/${'\''.code}"), session.calls)
             assertEquals("", connection.editable.toString())
         }
     }
