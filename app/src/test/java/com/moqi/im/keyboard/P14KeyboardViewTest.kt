@@ -45,7 +45,7 @@ class P14KeyboardViewTest {
             groups.map { row -> row.map { it.label } },
         )
         assertEquals(listOf(5, 5, 6, 7), definitions.map { it.size })
-        assertEquals(listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "~", "!", "@", "?"),
+        assertEquals(listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "`", "!", "@", "/"),
             groups.flatten().map { it.subLabel })
         assertTrue(groups.flatten().none { it.isRepeatable })
 
@@ -85,8 +85,11 @@ class P14KeyboardViewTest {
         show(KeyboardView.Layout.P14_CN)
         swipeDown(0, 0)
         swipeDown(1, 4)
-        swipeDown(2, 3)
-        assertEquals(listOf(KeyCode.P14_QW to "1", KeyCode.P14_L to "0", KeyCode.P14_BN to "@"), events)
+        for (column in 1..4) swipeDown(2, column)
+        assertEquals(listOf(
+            KeyCode.P14_QW to "1", KeyCode.P14_L to "0", KeyCode.P14_ZX to "`",
+            KeyCode.P14_CV to "!", KeyCode.P14_BN to "@", KeyCode.P14_M to "/",
+        ), events)
     }
 
     @Test

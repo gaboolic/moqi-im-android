@@ -348,10 +348,7 @@ class KeyboardView @JvmOverloads constructor(
         }
 
         val centeredBaseline = rect.centerY() - (textPaint.descent() + textPaint.ascent()) / 2f
-        val p14TopLabel = currentLayout == Layout.P14_CN && key.subLabel != null
-        val textBaseline = if (p14TopLabel) {
-            centeredBaseline + rect.height() * 0.08f
-        } else if (key.swipeText.isNullOrBlank() || isSpecialKey(key)) {
+        val textBaseline = if (key.swipeText.isNullOrBlank() || isSpecialKey(key)) {
             centeredBaseline
         } else {
             val extraUp = if (usesLetterDigitDualLineSpacing()) dp(QWERTY_DUAL_LINE_PRIMARY_UP_DP) else 0f
@@ -361,15 +358,9 @@ class KeyboardView @JvmOverloads constructor(
 
         val subLabel = key.subLabel
         if (subLabel != null && !isSpecialKey(key)) {
-            val themeText = ThemePalette.current(context).textColor
-            subLabelPaint.color = when {
-                dark -> 0xFF9090AA.toInt()
-                p14TopLabel -> (themeText and 0x00FFFFFF) or 0x66000000
-                else -> themeText
-            }
+            subLabelPaint.color = if (dark) 0xFF9090AA.toInt() else ThemePalette.current(context).textColor
             val subBottomInsetDp = if (usesLetterDigitDualLineSpacing()) QWERTY_DUAL_LINE_SUB_BOTTOM_INSET_DP else 7f
-            val subBaseline = if (p14TopLabel) rect.top + rect.height() * 0.10f - subLabelPaint.ascent()
-            else rect.bottom - dp(subBottomInsetDp)
+            val subBaseline = rect.bottom - dp(subBottomInsetDp)
             canvas.drawText(subLabel, rect.centerX(), subBaseline, subLabelPaint)
         }
     }
@@ -377,9 +368,9 @@ class KeyboardView @JvmOverloads constructor(
     fun isQwertyLayout(): Boolean =
         currentLayout == Layout.QWERTY_CN || currentLayout == Layout.QWERTY_EN
 
-    /** 26 键 / 9 键字母区：主字 + 下方数字或符号时的纵向间距（与 [QWERTY_DUAL_LINE_*] 一致）。 */
+    /** 26 键、14 键及 9 键字母区共用主字与下方副字的纵向间距。 */
     private fun usesLetterDigitDualLineSpacing(): Boolean =
-        isQwertyLayout() || isT9Layout()
+        isQwertyLayout() || isT9Layout() || currentLayout == Layout.P14_CN
 
     /** 文本键盘底行「中/英」使用同一套主次字色与字号。 */
     private fun usesStyledModeSwitchKey(): Boolean =
@@ -1112,10 +1103,10 @@ class KeyboardView @JvmOverloads constructor(
         ),
         listOf(
             KeyDefinition("⇧", KeyCode.SHIFT, 0.78f, isSticky = true),
-            p14Key("ZX", KeyCode.P14_ZX, "~"),
+            p14Key("ZX", KeyCode.P14_ZX, "`"),
             p14Key("CV", KeyCode.P14_CV, "!"),
             p14Key("BN", KeyCode.P14_BN, "@"),
-            p14Key("M", KeyCode.P14_M, "?", 0.66f),
+            p14Key("M", KeyCode.P14_M, "/", 0.66f),
             KeyDefinition("⌫", KeyCode.DELETE, 0.78f, isRepeatable = true)
         ),
         listOf(
