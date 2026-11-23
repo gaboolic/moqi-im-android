@@ -40,7 +40,7 @@ class TextKeyboardLayoutsTest {
     @Test fun strokeIsSeparateFromChinesePinyinAndEnglishT9() {
         val layouts = TextKeyboardLayouts()
         layouts.select(true, true)
-        layouts.applySchema(TextKeyboardLayouts.STROKE_SCHEMA_ID)
+        layouts.applySchema("rime_frost_stroke_t9")
         assertTrue(layouts.isChineseStroke)
         assertFalse(layouts.isT9(false))
         assertTrue(layouts.isT9(true))
@@ -54,14 +54,38 @@ class TextKeyboardLayoutsTest {
     @Test fun fourteenKeyDoesNotReuseNineKeyState() {
         val layouts = TextKeyboardLayouts()
         layouts.select(true, true)
-        layouts.applySchema(TextKeyboardLayouts.FOURTEEN_KEY_SCHEMA_ID)
+        layouts.applySchema("rime_frost_14key")
         assertTrue(layouts.isChineseFourteenKey)
         assertFalse(layouts.isT9(false))
         assertFalse(layouts.isChineseStroke)
         assertTrue(layouts.isT9(true))
-        layouts.applySchema(TextKeyboardLayouts.STROKE_SCHEMA_ID)
+        layouts.applySchema("rime_frost_stroke_t9")
         assertFalse(layouts.isChineseFourteenKey)
         assertTrue(layouts.isChineseStroke)
+    }
+
+    @Test fun strokeMarkerTakesPriorityOverGenericNineKeyMarker() {
+        val layouts = TextKeyboardLayouts()
+        for (schema in listOf("custom_stroke_t9", "custom_STROKE_T9_variant")) {
+            layouts.applySchema(schema)
+            assertTrue(schema, layouts.isChineseStroke)
+            assertFalse(schema, layouts.isT9(false))
+        }
+        layouts.applySchema("custom_t9")
+        assertFalse(layouts.isChineseStroke)
+        assertTrue(layouts.isT9(false))
+    }
+
+    @Test fun anySchemaIdContainingFourteenKeyMarkerUsesTheLayout() {
+        val layouts = TextKeyboardLayouts()
+        for (schema in listOf("moqi_wan_flypymo_14key", "example_14KEY_custom", "example_t9_14key")) {
+            layouts.applySchema(schema)
+            assertTrue(schema, layouts.isChineseFourteenKey)
+            assertFalse(schema, layouts.isT9(false))
+        }
+        layouts.applySchema("moqi_wan_flypymo")
+        assertFalse(layouts.isChineseFourteenKey)
+        assertFalse(layouts.isT9(false))
     }
 
     @Test fun selectingChineseLayoutLeavesEnglishUnchanged() {

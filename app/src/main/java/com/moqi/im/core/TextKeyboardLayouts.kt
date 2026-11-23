@@ -23,16 +23,16 @@ internal class TextKeyboardLayouts {
     fun applySchema(schemaId: String) {
         if (schemaId.isBlank()) return
         chineseLayout = when {
-            // Stroke also ends in _t9; match it before the generic pinyin rule.
-            schemaId == STROKE_SCHEMA_ID -> ChineseLayout.T9_STROKE
-            schemaId == FOURTEEN_KEY_SCHEMA_ID -> ChineseLayout.FOURTEEN_KEY
+            // Check the specific stroke marker before the generic _t9 rule.
+            isStrokeSchema(schemaId) -> ChineseLayout.T9_STROKE
+            isFourteenKeySchema(schemaId) -> ChineseLayout.FOURTEEN_KEY
             schemaId.contains("_t9", ignoreCase = true) -> ChineseLayout.T9_PINYIN
             else -> ChineseLayout.QWERTY
         }
     }
 
     companion object {
-        const val STROKE_SCHEMA_ID = "rime_frost_stroke_t9"
-        const val FOURTEEN_KEY_SCHEMA_ID = "rime_frost_14key"
+        fun isStrokeSchema(schemaId: String): Boolean = schemaId.contains("_stroke_t9", ignoreCase = true)
+        fun isFourteenKeySchema(schemaId: String): Boolean = schemaId.contains("_14key", ignoreCase = true)
     }
 }
