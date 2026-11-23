@@ -6,6 +6,7 @@ import android.view.inputmethod.BaseInputConnection
 import com.moqi.im.engine.*
 import com.moqi.im.keyboard.KeyCode
 import com.moqi.im.keyboard.KeyboardInputQueue
+import com.moqi.im.keyboard.KeyboardView
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,7 +75,7 @@ class ServiceInputBoundaryTest {
     }
 
     @Test fun strokeKeysStayInRimeAndBackspaceWorksBeforeFirstResult() {
-        val session = object : FakeEngineSession(TextKeyboardLayouts.STROKE_SCHEMA_ID) {
+        val session = object : FakeEngineSession("rime_frost_stroke_t9") {
             override fun keyDown(keyCode: Int, charCode: Int): MoqiImeResult {
                 if (keyCode == MoqiImeKeyMapper.VK_BACK) {
                     calls += "backspace"
@@ -110,8 +111,8 @@ class ServiceInputBoundaryTest {
         }
     }
 
-    @Test fun strokeWildcardAndSeparatorAreRimeCodes() {
-        val session = object : FakeEngineSession(TextKeyboardLayouts.STROKE_SCHEMA_ID) {
+    @Test fun thirdPartyStrokeSchemeUsesStrokeKeyRouting() {
+        val session = object : FakeEngineSession("custom_stroke_t9_variant") {
             override fun keyDown(keyCode: Int, charCode: Int): MoqiImeResult {
                 calls += "$keyCode/$charCode"
                 return engineResult(handled = false)
@@ -139,7 +140,7 @@ class ServiceInputBoundaryTest {
     }
 
     @Test fun fourteenKeySendsCompressedCodesAndNativeSeparator() {
-        val session = object : FakeEngineSession(TextKeyboardLayouts.FOURTEEN_KEY_SCHEMA_ID) {
+        val session = object : FakeEngineSession("moqi_wan_flypymo_14key") {
             override fun keyDown(keyCode: Int, charCode: Int): MoqiImeResult {
                 calls += "$keyCode/$charCode"
                 return engineResult(handled = false)
@@ -148,8 +149,12 @@ class ServiceInputBoundaryTest {
         withService(session) { service, worker, connection ->
             service.getSharedPreferences("moqi_im_prefs", 0).edit()
                 .putBoolean("key_sound", false).putBoolean("key_vibrate", false).apply()
+            val keyboard = KeyboardView(service)
+            ReflectionHelpers.setField(service, "keyboardView", keyboard)
             ReflectionHelpers.callInstanceMethod<Unit>(service, "applySchemaLayout",
                 ReflectionHelpers.ClassParameter.from(String::class.java, session.schema))
+            assertEquals(KeyboardView.Layout.P14_CN,
+                ReflectionHelpers.getField<KeyboardView.Layout>(keyboard, "currentLayout"))
             val keys = listOf(KeyCode.P14_QW, KeyCode.P14_ER, KeyCode.P14_TY, KeyCode.P14_UI, KeyCode.P14_OP,
                 KeyCode.P14_AS, KeyCode.P14_DF, KeyCode.P14_GH, KeyCode.P14_JK, KeyCode.P14_L,
                 KeyCode.P14_ZX, KeyCode.P14_CV, KeyCode.P14_BN, KeyCode.P14_M, KeyCode.P14_SEPARATOR)

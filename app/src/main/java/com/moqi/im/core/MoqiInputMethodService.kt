@@ -313,8 +313,8 @@ class MoqiInputMethodService : InputMethodService() {
             }
             override fun onSchema(schemaId: String) {
                 if (textLayouts.isChineseStroke || textLayouts.isChineseFourteenKey ||
-                    schemaId == TextKeyboardLayouts.STROKE_SCHEMA_ID ||
-                    schemaId == TextKeyboardLayouts.FOURTEEN_KEY_SCHEMA_ID
+                    TextKeyboardLayouts.isStrokeSchema(schemaId) ||
+                    TextKeyboardLayouts.isFourteenKeySchema(schemaId)
                 ) {
                     clearTextEngineState()
                 }
