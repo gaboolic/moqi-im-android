@@ -3,6 +3,8 @@ param(
     [string]$OutputAar = "$PSScriptRoot\..\app\libs\moqi-ime.aar",
     [string]$Target = "android/arm64",
     [int]$AndroidApi = 24,
+    [Parameter(Mandatory = $true)]
+    [string]$RimeFrostZip,
     [switch]$UsePrebuiltLibrime
 )
 
@@ -17,58 +19,25 @@ function Assert-Command($Name, $InstallHint) {
 Assert-Command "go" "Install Go first."
 Assert-Command "jar" "Install a JDK first."
 
-function Add-FrostStrokeSchema {
-    param([string]$TargetDir)
-
-    foreach ($name in @("default.yaml", "stroke.dict.yaml", "essay.txt")) {
-        if (-not (Test-Path -LiteralPath (Join-Path $TargetDir $name) -PathType Leaf)) {
-            throw "The Rime Frost submodule is missing $name; initialize it at the backend's pinned revision."
-        }
-    }
-
-    $schemaName = "rime_frost_stroke_t9.schema.yaml"
-    $schemaSource = Join-Path $PSScriptRoot "..\app\rime-data\$schemaName"
-    Copy-Item -LiteralPath $schemaSource -Destination (Join-Path $TargetDir $schemaName) -Force
-
-    # Stage the Android schema without changing either upstream Frost or user overrides.
-    $defaultPath = Join-Path $TargetDir "default.yaml"
-    $default = [System.IO.File]::ReadAllText($defaultPath)
-    $schemaList = [regex]::Match($default, '(?m)^schema_list:[ \t]*(?<eol>\r?\n)(?<items>(?:[ \t]+[^\r\n]*\r?\n|\r?\n)*)')
-    $items = [regex]::Matches($schemaList.Groups['items'].Value, '(?m)^(?<indent>[ \t]+)- schema:[ \t]+(?<id>[\w-]+)[^\r\n]*')
-    if ($items.Count -eq 0) {
-        throw "Expected a block schema_list in the pinned Rime Frost default.yaml."
-    }
-    foreach ($item in $items) {
-        if ($item.Groups['id'].Value -eq 'rime_frost_stroke_t9') {
-            return
-        }
-    }
-    $last = $items[$items.Count - 1]
-    $end = $schemaList.Groups['items'].Index + $last.Index + $last.Length
-    $entry = $schemaList.Groups['eol'].Value + $last.Groups['indent'].Value + '- schema: rime_frost_stroke_t9'
-    [System.IO.File]::WriteAllText($defaultPath, $default.Insert($end, $entry))
-}
-
 function Sync-RimeFrostData {
     param(
-        [string]$MoqiImeRoot
+        [string]$Archive,
+        [string]$TargetDir
     )
 
-    $sourceDir = Join-Path $MoqiImeRoot "rime-frost"
-    $targetDir = Join-Path $MoqiImeRoot "input_methods\rime\data"
-    if (-not (Test-Path $sourceDir)) {
-        throw "Missing rime-frost data directory: $sourceDir"
+    # Use the published data layout unchanged; Android does not maintain its own schema.
+    Write-Host "Extracting Rime Frost release ZIP for Android embed..."
+    Expand-Archive -LiteralPath $Archive -DestinationPath $TargetDir
+    foreach ($name in @('default.yaml', 'rime_frost_stroke_t9.schema.yaml', 'stroke.dict.yaml', 'essay.txt', 'lua/moqi_stroke.lua')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $TargetDir $name) -PathType Leaf)) {
+            throw "The Rime Frost release ZIP is missing $name. Use a release that includes wildcard and separator support."
+        }
+    }
+    $defaultYaml = Get-Content -LiteralPath (Join-Path $TargetDir 'default.yaml') -Raw -Encoding UTF8
+    if ($defaultYaml -notmatch '(?m)^\s*-\s+schema:\s+rime_frost_stroke_t9(?:\s|$)') {
+        throw 'The Rime Frost release ZIP does not register the nine-key stroke schema.'
     }
 
-    Write-Host "Syncing Rime Frost data for Android embed..."
-    New-Item -ItemType Directory -Force $targetDir | Out-Null
-    Copy-Item -Path (Join-Path $sourceDir "*") -Destination $targetDir -Recurse -Force
-
-    foreach ($name in @(".git", ".github", ".gitignore", "README.md", "LICENSE", "others")) {
-        Remove-Item -Recurse -Force (Join-Path $targetDir $name) -ErrorAction SilentlyContinue
-    }
-
-    Add-FrostStrokeSchema -TargetDir $targetDir
     $version = Get-RimeEmbedVersion -TargetDir $targetDir
     Set-Content -Path (Join-Path $targetDir ".moqi_embed_version") -Value $version -Encoding ASCII
     Write-Host "Rime Frost embed version: $version"
@@ -111,6 +80,7 @@ function Clear-RimeEmbedData {
 }
 
 $MoqiImeRoot = (Resolve-Path -LiteralPath $MoqiImeRoot).Path
+$RimeFrostZip = (Resolve-Path -LiteralPath $RimeFrostZip).Path
 $OutputAar = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputAar)
 $embedDir = Join-Path $MoqiImeRoot "input_methods\rime\data"
 if ((Test-Path -LiteralPath $embedDir) -and @(Get-ChildItem -LiteralPath $embedDir -Force).Count -ne 0) {
@@ -122,7 +92,7 @@ $oldGoBin = $env:GOBIN
 $oldPath = $env:PATH
 
 try {
-Sync-RimeFrostData -MoqiImeRoot $MoqiImeRoot
+Sync-RimeFrostData -Archive $RimeFrostZip -TargetDir $embedDir
 $abi = switch ($Target) {
     "android/arm64" { "arm64-v8a" }
     "android/arm" { "armeabi-v7a" }

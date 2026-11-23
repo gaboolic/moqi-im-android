@@ -51,4 +51,6 @@ object KeyCode {
     const val STROKE_PIE = -703
     const val STROKE_NA = -704
     const val STROKE_ZHE = -705
+    const val STROKE_WILDCARD = -706
+    const val STROKE_SEPARATOR = -707
 }
