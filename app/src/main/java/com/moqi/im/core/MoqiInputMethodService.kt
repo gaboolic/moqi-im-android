@@ -1812,6 +1812,10 @@ class MoqiInputMethodService : InputMethodService() {
             showMessage("无法从 URL 提取方案集名称")
             return
         }
+        if (name.equals("Rime", ignoreCase = true) || name.equals("rime_shared", ignoreCase = true)) {
+            showMessage("方案集名称与内置目录冲突，请更换 ZIP 文件名")
+            return
+        }
         composeView?.setComposingText("正在下载方案集...")
         downloadExecutor.execute {
             val result = runCatching {

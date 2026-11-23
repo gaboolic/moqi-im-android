@@ -2,6 +2,8 @@
 
 精简版和完整版都使用 [`moqi-ime.aar`](../app/libs/moqi-ime.aar)。Rime 数据由 Go 嵌入 `jni/arm64-v8a/libgojni.so`。引擎初始化时按 `.moqi_embed_version` 更新共享数据，Rime 再根据配置修改时间重新部署。不覆盖用户自定义配置或词典；若自定义配置完整替换了 `schema_list`，需自行加入 `rime_frost_stroke_t9`。
 
+只有内置 `Rime` 方案集使用白霜共享目录。下载的方案集用自己的目录作为 Rime 的共享和用户目录，这样默认配置和依赖不会被内置白霜覆盖。若旧版本已将下载方案集的默认配置移入 `trash`，首次部署时在原位置缺失的情况下恢复该配置，不覆盖现有配置。
+
 Android 直接使用白霜的发布打包脚本生成 ZIP。当前数据包取自 [白霜十四键 PR #432](https://github.com/gaboolic/rime-frost/pull/432) 的提交 `2e52d7705a24034c5cb7b62e81316f55e88f8ae9`。配置、Lua 模块和词典都来自同一个 ZIP，不在 Android 仓库另存一份。
 
 ## 重建随应用发布的 AAR
@@ -28,10 +30,11 @@ git clone https://github.com/gaboolic/librime.git $librime
 git -C $librime checkout --detach a49a57f7142c39021e4290d1a63c16e69649290d
 $env:CGO_CFLAGS = '"-I' + (Resolve-Path "$librime\src").Path.Replace('\', '/') + '"'
 git -C $backend apply (Join-Path $PWD 'patches/moqi-ime-real-candidate-page-change.patch')
+git -C $backend apply (Join-Path $PWD 'patches/moqi-ime-android-scheme-set-isolation.patch')
 $env:ANDROID_NDK_HOME = Join-Path $env:ANDROID_HOME 'ndk\26.1.10909125'
 .\scripts\build-moqi-ime-aar.ps1 -MoqiImeRoot $backend -RimeFrostZip "$frost\rime-frost-schemas.zip" -UsePrebuiltLibrime
 ```
 
 `-UsePrebuiltLibrime` 继续使用后端提交自带的 `librime.so` 和 `libc++_shared.so`，只重建 Go 桥和嵌入数据（Android API 24，arm64-v8a）。脚本仅向后端临时 `input_methods/rime/data` 目录解包，拒绝覆盖其中的已有文件；无需初始化后端的白霜数据子模块。
 
-本次嵌入数据标记：`b735ec1df22efe93357cb54c7bf2c5412b6e1b551e67119122f78adfe2fb3fae`。当前 AAR SHA-256：`cc5d7814cb321dc7c1adc843a548b5b877e1d2cf965278fadf16bee700c8f2ee`。ZIP/AAR 的归档时间戳可能不同，跨机器重建以嵌入数据标记校验内容。
+本次嵌入数据标记：`b735ec1df22efe93357cb54c7bf2c5412b6e1b551e67119122f78adfe2fb3fae`。当前 AAR SHA-256：`81ea6b634f9ed485246afbc6dc4db7a758440c8e3eccbfd46b8e4fe58ed536fe`。ZIP/AAR 的归档时间戳可能不同，跨机器重建以嵌入数据标记校验内容。
