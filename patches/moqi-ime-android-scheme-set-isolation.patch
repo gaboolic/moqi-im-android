@@ -1,0 +1,371 @@
+diff --git a/input_methods/rime/android_data.go b/input_methods/rime/android_data.go
+index c23f8f8..1bd912c 100644
+--- a/input_methods/rime/android_data.go
++++ b/input_methods/rime/android_data.go
+@@ -56,14 +56,26 @@ func androidAppDataRoot() string {
+ }
+ 
+ func androidRimeDirs() (sharedDir string, userDir string, ok bool) {
+-	androidDirsOnce.Do(func() {
+-		root := androidAppDataRoot()
+-		if root == "" {
+-			log.Printf("Android RIME 数据目录不可用")
+-			return
+-		}
++	root := androidAppDataRoot()
++	if root == "" {
++		log.Printf("Android RIME 数据目录不可用")
++		return "", "", false
++	}
++	name := currentSchemeSetName()
++	userDir = filepath.Join(root, name)
++	if err := os.MkdirAll(userDir, 0o700); err != nil {
++		log.Printf("创建 Android RIME 用户目录失败: %v", err)
++		return "", userDir, false
++	}
++	if name != defaultSchemeSetName {
++		// Package configs, prebuilt data and Lua shared-path lookups all stay
++		// local to this scheme. The two source paths are equivalent, so Rime
++		// cannot treat a package config as an older copy of an embedded one.
++		return userDir, userDir, true
++	}
+ 
+-		androidSharedDir = filepath.Join(root, "rime_shared")
++	androidDirsOnce.Do(func() {
++		androidSharedDir = filepath.Join(root, androidSharedDataDirName)
+ 		if err := extractAndroidRimeData(androidSharedDir); err != nil {
+ 			log.Printf("解压 Android RIME 数据失败: %v", err)
+ 			return
+@@ -71,19 +83,7 @@ func androidRimeDirs() (sharedDir string, userDir string, ok bool) {
+ 		androidDirsOK = true
+ 		debugLogf("Android RIME shared 数据目录已就绪 shared=%s", androidSharedDir)
+ 	})
+-	if !androidDirsOK {
+-		return androidSharedDir, "", false
+-	}
+-	root := androidAppDataRoot()
+-	if root == "" {
+-		return androidSharedDir, "", false
+-	}
+-	userDir = filepath.Join(root, currentSchemeSetName())
+-	if err := os.MkdirAll(userDir, 0o700); err != nil {
+-		log.Printf("创建 Android RIME 用户目录失败: %v", err)
+-		return androidSharedDir, userDir, false
+-	}
+-	return androidSharedDir, userDir, true
++	return androidSharedDir, userDir, androidDirsOK
+ }
+ 
+ func extractAndroidRimeData(dst string) error {
+diff --git a/input_methods/rime/android_scheme_set.go b/input_methods/rime/android_scheme_set.go
+new file mode 100644
+index 0000000..bf33321
+--- /dev/null
++++ b/input_methods/rime/android_scheme_set.go
+@@ -0,0 +1,104 @@
++//go:build android
++
++package rime
++
++import (
++	"errors"
++	"io"
++	"os"
++	"path/filepath"
++)
++
++const androidSchemeSetIsolationMarker = ".moqi_scheme_set_isolated_v1"
++
++// prepareAndroidSchemeSet migrates the package before librime loads or checks
++// timestamps. Older builds could move default.yaml into trash and compile the
++// embedded default into the package's build directory instead.
++func prepareAndroidSchemeSet(userDir string) (forceFullCheck bool, err error) {
++	marker := filepath.Join(userDir, androidSchemeSetIsolationMarker)
++	source := filepath.Join(userDir, "default.yaml")
++	buildDir := filepath.Join(userDir, "build")
++	generated := filepath.Join(buildDir, "default.yaml")
++	if _, err := os.Lstat(marker); err == nil {
++		// Also retry the deploy if an earlier process stopped after migration
++		// but before rebuilding an existing source config.
++		_, sourceErr := os.Stat(source)
++		_, generatedErr := os.Stat(generated)
++		return sourceErr == nil && errors.Is(generatedErr, os.ErrNotExist), nil
++	} else if !errors.Is(err, os.ErrNotExist) {
++		return false, err
++	}
++
++	if _, err := os.Lstat(source); errors.Is(err, os.ErrNotExist) {
++		if err := recoverAndroidSchemeSetDefault(userDir, source); err != nil {
++			return false, err
++		}
++	} else if err != nil {
++		return false, err
++	}
++
++	// Invalidate only the compiled default, not other package or user data.
++	// A manually restored root config can have the same timestamps as before.
++	if info, err := os.Lstat(buildDir); err == nil && info.IsDir() {
++		if info, err := os.Lstat(generated); err == nil && info.Mode().IsRegular() {
++			if err := os.Remove(generated); err != nil && !errors.Is(err, os.ErrNotExist) {
++				return false, err
++			}
++		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
++			return false, err
++		}
++	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
++		return false, err
++	}
++
++	if err := os.WriteFile(marker, nil, 0o600); err != nil {
++		return false, err
++	}
++	return true, nil
++}
++
++func recoverAndroidSchemeSetDefault(userDir, destination string) error {
++	trash := filepath.Join(userDir, "trash")
++	if info, err := os.Lstat(trash); err == nil && !info.IsDir() {
++		return nil
++	} else if err != nil {
++		if errors.Is(err, os.ErrNotExist) {
++			return nil
++		}
++		return err
++	}
++
++	backup := filepath.Join(trash, "default.yaml")
++	if info, err := os.Lstat(backup); err == nil && !info.Mode().IsRegular() {
++		return nil
++	} else if err != nil {
++		if errors.Is(err, os.ErrNotExist) {
++			return nil
++		}
++		return err
++	}
++
++	in, err := os.Open(backup)
++	if err != nil {
++		return err
++	}
++	defer in.Close()
++
++	// Android's external-files filesystem need not support hard links. Use
++	// exclusive creation instead: never replace the user's current config,
++	// and always keep the original backup in trash.
++	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
++	if errors.Is(err, os.ErrExist) {
++		return nil
++	}
++	if err != nil {
++		return err
++	}
++	_, copyErr := io.Copy(out, in)
++	closeErr := out.Close()
++	if err := errors.Join(copyErr, closeErr); err != nil {
++		_ = os.Remove(destination)
++		return err
++	}
++	return nil
++}
+diff --git a/input_methods/rime/android_scheme_set_test.go b/input_methods/rime/android_scheme_set_test.go
+new file mode 100644
+index 0000000..bf84760
+--- /dev/null
++++ b/input_methods/rime/android_scheme_set_test.go
+@@ -0,0 +1,101 @@
++//go:build android
++
++package rime
++
++import (
++	"errors"
++	"os"
++	"path/filepath"
++	"testing"
++	"time"
++)
++
++func TestPrepareAndroidSchemeSetRestoresDefaultAndInvalidatesCache(t *testing.T) {
++	dir := t.TempDir()
++	const original = "config_version: '0.50'\nschema_list: [{schema: package_schema}]\n"
++	writeAndroidSchemeSetFile(t, dir, "trash/default.yaml", original)
++	writeAndroidSchemeSetFile(t, dir, "build/default.yaml", "config_version: '0.51'\n")
++	writeAndroidSchemeSetFile(t, dir, "build/package_schema.table.bin", "keep generated dictionary")
++	writeAndroidSchemeSetFile(t, dir, "user.yaml", "keep user preferences")
++
++	if force, err := prepareAndroidSchemeSet(dir); err != nil || !force {
++		t.Fatalf("initial prepare: force=%t, err=%v", force, err)
++	}
++	assertAndroidSchemeSetFile(t, dir, "default.yaml", original)
++	assertAndroidSchemeSetFile(t, dir, "trash/default.yaml", original)
++	assertAndroidSchemeSetFile(t, dir, "build/package_schema.table.bin", "keep generated dictionary")
++	assertAndroidSchemeSetFile(t, dir, "user.yaml", "keep user preferences")
++	assertAndroidSchemeSetFileMissing(t, dir, "build/default.yaml")
++
++	if force, err := prepareAndroidSchemeSet(dir); err != nil || !force {
++		t.Fatalf("interrupted deploy should retry: force=%t, err=%v", force, err)
++	}
++	writeAndroidSchemeSetFile(t, dir, "build/default.yaml", "newly built config")
++	if force, err := prepareAndroidSchemeSet(dir); err != nil || force {
++		t.Fatalf("completed deployment should not migrate again: force=%t, err=%v", force, err)
++	}
++	assertAndroidSchemeSetFile(t, dir, "build/default.yaml", "newly built config")
++}
++
++func TestPrepareAndroidSchemeSetPreservesManualRestore(t *testing.T) {
++	dir := t.TempDir()
++	writeAndroidSchemeSetFile(t, dir, "default.yaml", "manually restored config")
++	writeAndroidSchemeSetFile(t, dir, "trash/default.yaml", "old backup")
++	writeAndroidSchemeSetFile(t, dir, "build/default.yaml", "old generated config")
++	old := time.Unix(1500000000, 0)
++	if err := os.Chtimes(filepath.Join(dir, "default.yaml"), old, old); err != nil {
++		t.Fatal(err)
++	}
++
++	if force, err := prepareAndroidSchemeSet(dir); err != nil || !force {
++		t.Fatalf("must force deploy despite old source timestamp: force=%t, err=%v", force, err)
++	}
++	assertAndroidSchemeSetFile(t, dir, "default.yaml", "manually restored config")
++	assertAndroidSchemeSetFile(t, dir, "trash/default.yaml", "old backup")
++	assertAndroidSchemeSetFileMissing(t, dir, "build/default.yaml")
++
++	if err := os.Remove(filepath.Join(dir, "default.yaml")); err != nil {
++		t.Fatal(err)
++	}
++	if force, err := prepareAndroidSchemeSet(dir); err != nil || force {
++		t.Fatalf("do not restore intentionally removed config later: force=%t, err=%v", force, err)
++	}
++	assertAndroidSchemeSetFileMissing(t, dir, "default.yaml")
++}
++
++func TestPrepareAndroidSchemeSetDoesNotUseNonRegularTrash(t *testing.T) {
++	dir := t.TempDir()
++	if err := os.MkdirAll(filepath.Join(dir, "trash", "default.yaml"), 0o700); err != nil {
++		t.Fatal(err)
++	}
++	if force, err := prepareAndroidSchemeSet(dir); err != nil || !force {
++		t.Fatalf("initial prepare should ignore directories: force=%t, err=%v", force, err)
++	}
++	assertAndroidSchemeSetFileMissing(t, dir, "default.yaml")
++}
++
++func writeAndroidSchemeSetFile(t *testing.T, root, rel, content string) {
++	t.Helper()
++	path := filepath.Join(root, filepath.FromSlash(rel))
++	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
++		t.Fatal(err)
++	}
++}
++
++func assertAndroidSchemeSetFile(t *testing.T, root, rel, want string) {
++	t.Helper()
++	got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
++	if err != nil || string(got) != want {
++		t.Fatalf("%s = %q, err=%v; want %q", rel, got, err, want)
++	}
++}
++
++func assertAndroidSchemeSetFileMissing(t *testing.T, root, rel string) {
++	t.Helper()
++	if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(rel))); !errors.Is(err, os.ErrNotExist) {
++		t.Fatalf("expected %s to be missing, stat error=%v", rel, err)
++	}
++}
+diff --git a/input_methods/rime/librime_android.go b/input_methods/rime/librime_android.go
+index 7921de0..0c3f109 100644
+--- a/input_methods/rime/librime_android.go
++++ b/input_methods/rime/librime_android.go
+@@ -788,6 +788,14 @@ func initializeEngine(traits RimeTraits, fullcheck bool) bool {
+ 		debugLogf("RIME initializeEngine 完成 elapsed=%s success=%t fullcheck=%t", time.Since(start), success, fullcheck)
+ 	}()
+ 
++	if traits.SharedDataDir != "" && traits.SharedDataDir == traits.UserDataDir {
++		forceFullCheck, err := prepareAndroidSchemeSet(traits.UserDataDir)
++		if err != nil {
++			log.Printf("迁移 Android RIME 方案集失败 %q: %v", traits.UserDataDir, err)
++			return false
++		}
++		fullcheck = fullcheck || forceFullCheck
++	}
+ 	debugLogf("RIME initializeEngine 开始 fullcheck=%t sharedDir=%q userDir=%q prebuiltDir=%q stagingDir=%q", fullcheck, traits.SharedDataDir, traits.UserDataDir, traits.PrebuiltDataDir, traits.StagingDir)
+ 	if !Init(traits) {
+ 		log.Println("RIME setup 失败")
+diff --git a/input_methods/rime/scheme_set.go b/input_methods/rime/scheme_set.go
+index 6b73cc6..60a5747 100644
+--- a/input_methods/rime/scheme_set.go
++++ b/input_methods/rime/scheme_set.go
+@@ -4,14 +4,16 @@ import (
+ 	"encoding/json"
+ 	"os"
+ 	"path/filepath"
++	"runtime"
+ 	"sort"
+ 	"strings"
+ 	"sync/atomic"
+ )
+ 
+ const (
+-	defaultSchemeSetName    = "Rime"
+-	schemeSetConfigFileName = "scheme_set.json"
++	defaultSchemeSetName     = "Rime"
++	schemeSetConfigFileName  = "scheme_set.json"
++	androidSharedDataDirName = "rime_shared"
+ )
+ 
+ type schemeSetConfig struct {
+@@ -57,6 +59,11 @@ func normalizeSchemeSetName(name string) string {
+ 	return name
+ }
+ 
++func isReservedAndroidSchemeSetName(name string) bool {
++	// Android's emulated external filesystem can be case-insensitive.
++	return runtime.GOOS == "android" && strings.EqualFold(name, androidSharedDataDirName)
++}
++
+ func schemeSetConfigPath() string {
+ 	root := moqiAppDataDir()
+ 	if root == "" {
+@@ -87,7 +94,7 @@ func availableSchemeSets() []string {
+ 			continue
+ 		}
+ 		name := normalizeSchemeSetName(entry.Name())
+-		if name == "" {
++		if name == "" || isReservedAndroidSchemeSetName(name) {
+ 			continue
+ 		}
+ 		if _, ok := seen[name]; ok {
+@@ -162,6 +169,9 @@ func saveCurrentSchemeSetName(name string) bool {
+ 	}
+ 
+ 	name = normalizeSchemeSetName(name)
++	if isReservedAndroidSchemeSetName(name) {
++		return false
++	}
+ 	data, err := json.MarshalIndent(schemeSetConfig{Current: name}, "", "  ")
+ 	if err != nil {
+ 		return false
+diff --git a/input_methods/rime/scheme_set_download.go b/input_methods/rime/scheme_set_download.go
+index 664fd32..6bdfaa7 100644
+--- a/input_methods/rime/scheme_set_download.go
++++ b/input_methods/rime/scheme_set_download.go
+@@ -15,6 +15,7 @@ import (
+ 	"os"
+ 	"path"
+ 	"path/filepath"
++	"runtime"
+ 	"strings"
+ 	"sync"
+ 	"time"
+@@ -207,7 +208,8 @@ func validateDownloadedSchemeSetName(name string) (string, error) {
+ 		return "", errors.New("方案集名称为空")
+ 	}
+ 	normalized := normalizeSchemeSetName(trimmed)
+-	if normalized != trimmed {
++	if normalized != trimmed || isReservedAndroidSchemeSetName(normalized) ||
++		(runtime.GOOS == "android" && strings.EqualFold(normalized, defaultSchemeSetName)) {
+ 		return "", fmt.Errorf("非法方案集名称: %s", name)
+ 	}
+ 	return normalized, nil
