@@ -145,8 +145,10 @@ class MoqiInputMethodService : InputMethodService() {
     private var shiftActive: Boolean = false
     private var shiftLocked: Boolean = false
     private var isT9Mode: Boolean = false
-    private val isStrokeMode: Boolean
-        get() = (currentMode == InputMode.PINYIN || currentMode == InputMode.WUBI) && textLayouts.isChineseStroke
+    private val isChineseTextMode: Boolean
+        get() = currentMode == InputMode.PINYIN || currentMode == InputMode.WUBI
+    private val isStrokeMode: Boolean get() = isChineseTextMode && textLayouts.isChineseStroke
+    private val isFourteenKeyMode: Boolean get() = isChineseTextMode && textLayouts.isChineseFourteenKey
     private val textLayouts = TextKeyboardLayouts()
     private var modeBeforeVoice: InputMode = InputMode.PINYIN
     private var sherpaVoiceEngine: SherpaVoiceEngine? = null
@@ -310,7 +312,10 @@ class MoqiInputMethodService : InputMethodService() {
                 }
             }
             override fun onSchema(schemaId: String) {
-                if (textLayouts.isChineseStroke || schemaId == TextKeyboardLayouts.STROKE_SCHEMA_ID) {
+                if (textLayouts.isChineseStroke || textLayouts.isChineseFourteenKey ||
+                    schemaId == TextKeyboardLayouts.STROKE_SCHEMA_ID ||
+                    schemaId == TextKeyboardLayouts.FOURTEEN_KEY_SCHEMA_ID
+                ) {
                     clearTextEngineState()
                 }
                 engineRunner.selectSchema(schemaId) { result, current ->
@@ -509,6 +514,7 @@ class MoqiInputMethodService : InputMethodService() {
             KeyCode.STROKE_ZHE -> handleStroke('z')
             KeyCode.STROKE_WILDCARD -> handleStroke('x')
             KeyCode.STROKE_SEPARATOR -> handleStroke('\'')
+            in KeyCode.P14_SEPARATOR..KeyCode.P14_QW -> handleFourteenKey(keyCode)
             in KeyCode.T9_POUND..KeyCode.T9_1 -> handleT9Key(keyCode)
             else -> {
                 val mapped = MoqiImeKeyMapper.fromAndroidKeyCode(keyCode, isShifted || shiftActive)
@@ -527,7 +533,7 @@ class MoqiInputMethodService : InputMethodService() {
         val input = SymbolInputPolicy.resolve(
             text = text,
             english = currentMode == InputMode.ENGLISH,
-            literalPanel = literalPanel || ((isT9Mode || isStrokeMode) && text.length == 1 && text[0].isDigit()),
+            literalPanel = literalPanel || ((isT9Mode || isStrokeMode || isFourteenKeyMode) && text.length == 1 && text[0].isDigit()),
             t9Composing = isT9Mode && currentMode == InputMode.PINYIN && t9PinyinDigits.isNotEmpty(),
             // The worker must check its ordered state, not a potentially stale UI composition snapshot.
             composing = currentMode != InputMode.ENGLISH
@@ -594,6 +600,30 @@ class MoqiInputMethodService : InputMethodService() {
         }
         // A stroke key is a Rime code, not text to commit or retry in a pinyin schema.
         submitMoqiKey(keyCode, charCode)
+    }
+
+    private fun handleFourteenKey(keyCode: Int) {
+        if (!isFourteenKeyMode) return
+        val code = when (keyCode) {
+            KeyCode.P14_QW -> 'q'
+            KeyCode.P14_ER -> 'e'
+            KeyCode.P14_TY -> 't'
+            KeyCode.P14_UI -> 'u'
+            KeyCode.P14_OP -> 'o'
+            KeyCode.P14_AS -> 'a'
+            KeyCode.P14_DF -> 'd'
+            KeyCode.P14_GH -> 'g'
+            KeyCode.P14_JK -> 'j'
+            KeyCode.P14_L -> 'l'
+            KeyCode.P14_ZX -> 'z'
+            KeyCode.P14_CV -> 'c'
+            KeyCode.P14_BN -> 'b'
+            KeyCode.P14_M -> 'm'
+            KeyCode.P14_SEPARATOR -> '\''
+            else -> return
+        }
+        val (key, char) = if (code == '\'') MoqiImeKeyMapper.symbol(code) else MoqiImeKeyMapper.printable(code)
+        submitMoqiKey(key, char)
     }
 
     private fun handleT9Key(keyCode: Int) {
@@ -803,7 +833,7 @@ class MoqiInputMethodService : InputMethodService() {
         if (currentMode == InputMode.ENGLISH) {
             commitText(charCode.toChar().toString())
         } else {
-            submitMoqiKey(keyCode, charCode, retryFullPinyinOnUnhandled = !isStrokeMode)
+            submitMoqiKey(keyCode, charCode, retryFullPinyinOnUnhandled = !isStrokeMode && !isFourteenKeyMode)
         }
         if (shiftActive && !shiftLocked) {
             shiftActive = false
@@ -821,8 +851,8 @@ class MoqiInputMethodService : InputMethodService() {
             deleteSurroundingCodePoint()
             return
         }
-        if (isStrokeMode) {
-            // The first stroke may still be queued; let Rime decide whether it has a stroke to delete.
+        if (isStrokeMode || isFourteenKeyMode) {
+            // The first key may still be queued; let Rime decide whether there is composition to delete.
             submitMoqiKey(MoqiImeKeyMapper.VK_BACK, fallbackOnFailure = true) {
                 deleteSurroundingCodePoint()
             }
@@ -1380,6 +1410,8 @@ class MoqiInputMethodService : InputMethodService() {
             KeyboardView.Layout.VOICE
         } else if (isStrokeMode) {
             KeyboardView.Layout.T9_STROKE
+        } else if (isFourteenKeyMode) {
+            KeyboardView.Layout.P14_CN
         } else if (isT9Mode) {
             when (currentMode) {
                 InputMode.ENGLISH -> KeyboardView.Layout.T9_EN

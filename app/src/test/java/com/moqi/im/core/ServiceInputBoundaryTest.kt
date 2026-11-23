@@ -138,6 +138,33 @@ class ServiceInputBoundaryTest {
         }
     }
 
+    @Test fun fourteenKeySendsCompressedCodesAndNativeSeparator() {
+        val session = object : FakeEngineSession(TextKeyboardLayouts.FOURTEEN_KEY_SCHEMA_ID) {
+            override fun keyDown(keyCode: Int, charCode: Int): MoqiImeResult {
+                calls += "$keyCode/$charCode"
+                return engineResult(handled = false)
+            }
+        }
+        withService(session) { service, worker, connection ->
+            service.getSharedPreferences("moqi_im_prefs", 0).edit()
+                .putBoolean("key_sound", false).putBoolean("key_vibrate", false).apply()
+            ReflectionHelpers.callInstanceMethod<Unit>(service, "applySchemaLayout",
+                ReflectionHelpers.ClassParameter.from(String::class.java, session.schema))
+            val keys = listOf(KeyCode.P14_QW, KeyCode.P14_ER, KeyCode.P14_TY, KeyCode.P14_UI, KeyCode.P14_OP,
+                KeyCode.P14_AS, KeyCode.P14_DF, KeyCode.P14_GH, KeyCode.P14_JK, KeyCode.P14_L,
+                KeyCode.P14_ZX, KeyCode.P14_CV, KeyCode.P14_BN, KeyCode.P14_M, KeyCode.P14_SEPARATOR)
+            keys.forEach { code ->
+                ReflectionHelpers.callInstanceMethod<Unit>(service, "handleKey",
+                    ReflectionHelpers.ClassParameter.from(Int::class.javaPrimitiveType!!, code),
+                    ReflectionHelpers.ClassParameter.from(Boolean::class.javaPrimitiveType!!, false))
+            }
+            worker.drain()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals("qetuoadgjlzcbm".map { "${it.code}/${it.code}" } + "0/${'\''.code}", session.calls)
+            assertEquals("", connection.editable.toString())
+        }
+    }
+
     private fun withService(session: FakeEngineSession,
         test: (MoqiInputMethodService, ManualEngineExecutor, BaseInputConnection) -> Unit) {
         val service = Robolectric.buildService(MoqiInputMethodService::class.java).get()

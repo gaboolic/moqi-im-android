@@ -51,6 +51,19 @@ class TextKeyboardLayoutsTest {
         assertTrue(layouts.isT9(false))
     }
 
+    @Test fun fourteenKeyDoesNotReuseNineKeyState() {
+        val layouts = TextKeyboardLayouts()
+        layouts.select(true, true)
+        layouts.applySchema(TextKeyboardLayouts.FOURTEEN_KEY_SCHEMA_ID)
+        assertTrue(layouts.isChineseFourteenKey)
+        assertFalse(layouts.isT9(false))
+        assertFalse(layouts.isChineseStroke)
+        assertTrue(layouts.isT9(true))
+        layouts.applySchema(TextKeyboardLayouts.STROKE_SCHEMA_ID)
+        assertFalse(layouts.isChineseFourteenKey)
+        assertTrue(layouts.isChineseStroke)
+    }
+
     @Test fun selectingChineseLayoutLeavesEnglishUnchanged() {
         val layouts = TextKeyboardLayouts()
         layouts.select(true, true)
